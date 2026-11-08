@@ -224,7 +224,13 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
             }
             for p in list {
                 let mut nbt = Compound::new();
-                nbt.insert("block_state".into(), p.get("state").cloned().unwrap_or(Tag::Compound(Compound::new())));
+                let mut shown = p.get("state").cloned().unwrap_or(Tag::Compound(Compound::new()));
+                if matches!(shown.get("Name"), Some(Tag::String(n)) if n.to_string_lossy() == crate::game::kinetics_drill::BLOCK) {
+                    if let Tag::Compound(s) = &mut shown {
+                        s.insert("Name".into(), Tag::String(crate::game::kinetics_drill::DISPLAY.into()));
+                    }
+                }
+                nbt.insert("block_state".into(), shown);
                 nbt.insert("Tags".into(), Tag::List(vec![Tag::String(c::PIECE_TAG.into())]));
                 // Clients ease each tick's move over the tick.
                 nbt.insert("teleport_duration".into(), Tag::Int(1));

@@ -13,6 +13,9 @@
 // tick instead of waiting for its neighbour to change or for its lazy tick (same result, without a neighbour hook).
 
 pub const BLOCK: &str = "kinetics:mechanical_drill";
+/// What a drill on a moving contraption's `block_display` shows: the drill's own model is empty (its block entity
+/// draws it), this block's is the whole drill turned to its `facing`. Never placed in the world.
+pub const DISPLAY: &str = "kinetics:drill_display";
 /// Create's NBT keys: the crack (0 to 9) and the ticks to its next step (-1: idle until a block is there).
 pub const PROGRESS_KEY: &str = "Progress";
 pub const NEXT_KEY: &str = "NextTick";

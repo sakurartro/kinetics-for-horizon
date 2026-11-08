@@ -118,6 +118,16 @@ def build_local_mod(source, out, extracted_assets, create_items):
         entries[rel] = (json.dumps(item, indent=2) + "\n").encode()
         replaced.append(item_model)
 
+    # A moving contraption shows its blocks as block displays: only blockstate models, none of what block entities draw
+    # over them. So the casings' placeholders become Create's cubes (the static look drawn over them is the same), and
+    # the drill's display block (contraption_tick.rs) Create's whole drill, its item model, built facing south.
+    for casing in ("andesite_casing", "brass_casing", "copper_casing"):
+        entries[f"assets/kinetics/models/block/{casing}.json"] = json.dumps({"parent": f"create:block/{casing}"}).encode()
+    if "mechanical_drill" in create_items:
+        turns = {"south": {}, "north": {"y": 180}, "east": {"y": 270}, "west": {"y": 90}, "up": {"x": 90}, "down": {"x": 270}}
+        entries["assets/kinetics/blockstates/drill_display.json"] = json.dumps({"variants": {
+            f"facing={f}": {"model": "create:block/mechanical_drill/item", **r} for f, r in turns.items()}}, indent=2).encode()
+
     entries.update(extracted_assets)
     out.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:

@@ -1,75 +1,87 @@
 {
-  "template": "minecraft:amethyst_cluster",
-  "properties": {
-    "hardness": 1.5,
-    "explosion_resistance": 6.0,
-    "sounds": "minecraft:andesite",
-    "light": 0
-  },
-  "shapes": {
-    "property": "facing",
-    "values": {
-      "up": [
-        [
-          0,
-          0,
-          0,
-          1,
-          0.75,
-          1
-        ]
-      ],
-      "down": [
-        [
-          0,
-          0.25,
-          0,
-          1,
-          1,
-          1
-        ]
-      ],
-      "north": [
-        [
-          0,
-          0,
-          0.25,
-          1,
-          1,
-          1
-        ]
-      ],
-      "south": [
-        [
-          0,
-          0,
-          0,
-          1,
-          1,
-          0.75
-        ]
-      ],
-      "east": [
-        [
-          0,
-          0,
-          0,
-          0.75,
-          1,
-          1
-        ]
-      ],
-      "west": [
-        [
-          0.25,
-          0,
-          0,
-          1,
-          1,
-          1
-        ]
-      ]
-    }
-  },
-  "item": true
+ "template": "minecraft:glass",
+ "properties": {
+  "hardness": 1.5,
+  "explosion_resistance": 6.0,
+  "sounds": "minecraft:andesite"
+ },
+ "shapes": {
+  "property": "facing",
+  "values": {
+   "up": [
+    [
+     0,
+     0,
+     0,
+     1,
+     0.75,
+     1
+    ]
+   ],
+   "down": [
+    [
+     0,
+     0.25,
+     0,
+     1,
+     1,
+     1
+    ]
+   ],
+   "north": [
+    [
+     0,
+     0,
+     0.25,
+     1,
+     1,
+     1
+    ]
+   ],
+   "south": [
+    [
+     0,
+     0,
+     0,
+     1,
+     1,
+     0.75
+    ]
+   ],
+   "east": [
+    [
+     0,
+     0,
+     0,
+     0.75,
+     1,
+     1
+    ]
+   ],
+   "west": [
+    [
+     0.25,
+     0,
+     0,
+     1,
+     1,
+     1
+    ]
+   ]
+  }
+ },
+ "item": true,
+ "state_properties": {
+  "facing": {
+   "type": "enum",
+   "values": [
+    "north",
+    "east",
+    "south",
+    "west",
+    "up",
+    "down"
+   ]
+  }
+ }
 }

@@ -1,39 +1,21 @@
 {
   "variants": {
-    "facing=down,waterlogged=false": {
+    "facing=down": {
       "model": "kinetics:block/drill_block"
     },
-    "facing=down,waterlogged=true": {
+    "facing=east": {
       "model": "kinetics:block/drill_block"
     },
-    "facing=east,waterlogged=false": {
+    "facing=north": {
       "model": "kinetics:block/drill_block"
     },
-    "facing=east,waterlogged=true": {
+    "facing=south": {
       "model": "kinetics:block/drill_block"
     },
-    "facing=north,waterlogged=false": {
+    "facing=up": {
       "model": "kinetics:block/drill_block"
     },
-    "facing=north,waterlogged=true": {
-      "model": "kinetics:block/drill_block"
-    },
-    "facing=south,waterlogged=false": {
-      "model": "kinetics:block/drill_block"
-    },
-    "facing=south,waterlogged=true": {
-      "model": "kinetics:block/drill_block"
-    },
-    "facing=up,waterlogged=false": {
-      "model": "kinetics:block/drill_block"
-    },
-    "facing=up,waterlogged=true": {
-      "model": "kinetics:block/drill_block"
-    },
-    "facing=west,waterlogged=false": {
-      "model": "kinetics:block/drill_block"
-    },
-    "facing=west,waterlogged=true": {
+    "facing=west": {
       "model": "kinetics:block/drill_block"
     }
   }

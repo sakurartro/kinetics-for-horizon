@@ -1,7 +1,13 @@
-# A big "Horizon" 50 blocks the way the player looks (/function kinetics:horizon_text); running it again moves it.
-# Scale 60: "Horizon" is 38 font pixels wide, 1/40 block each, so ~57 x 14 blocks. At 50 blocks with the default
-# FOV 70 the screen spans ~70 blocks high and ~110 wide (16:10, a 13" laptop), so it fits with room around it.
-# It always faces the camera (billboard), lit at full brightness, with no background box.
+# "Horizon" in white concrete, 50 blocks the way the player looks (/function kinetics:horizon_text).
+# Pixels are 2x2 blocks, 7 rows: 74 x 14 blocks. At 50 blocks with the default FOV 70 the screen spans ~70 blocks
+# high and ~110 wide (16:10, a 13" laptop), so it fits with room around it. It stands upright, square to the nearest
+# of the four directions (fill can't draw it slanted), its middle at eye height. The blocks stay until broken.
+# The letters are horizon_text/letters, rows of fills.
 
+# The floating-text version of before, if one is still there.
 kill @e[type=minecraft:text_display,tag=kinetics.horizon_text]
-execute at @s anchored eyes positioned ^ ^ ^50 run summon minecraft:text_display ~ ~-7 ~ {Tags:["kinetics.horizon_text"],text:"Horizon",billboard:"center",background:0,shadow:1b,view_range:2f,brightness:{sky:15,block:15},transformation:{left_rotation:[0f,0f,0f,1f],right_rotation:[0f,0f,0f,1f],translation:[0f,0f,0f],scale:[60f,60f,60f]}}
+# Block centres (align, then +.5), so turned local offsets never round to the next block.
+execute if entity @s[y_rotation=-45..44.9] at @s rotated 0 0 positioned ^ ^1.6 ^50 align xyz positioned ~.5 ~.5 ~.5 run function kinetics:horizon_text/letters
+execute if entity @s[y_rotation=45..134.9] at @s rotated 90 0 positioned ^ ^1.6 ^50 align xyz positioned ~.5 ~.5 ~.5 run function kinetics:horizon_text/letters
+execute if entity @s[y_rotation=135..-135.1] at @s rotated 180 0 positioned ^ ^1.6 ^50 align xyz positioned ~.5 ~.5 ~.5 run function kinetics:horizon_text/letters
+execute if entity @s[y_rotation=-135..-45.1] at @s rotated -90 0 positioned ^ ^1.6 ^50 align xyz positioned ~.5 ~.5 ~.5 run function kinetics:horizon_text/letters

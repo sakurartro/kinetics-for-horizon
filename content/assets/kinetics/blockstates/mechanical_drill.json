@@ -1,0 +1,22 @@
+{
+  "variants": {
+    "facing=down": {
+      "model": "kinetics:block/drill_block"
+    },
+    "facing=east": {
+      "model": "kinetics:block/drill_block"
+    },
+    "facing=north": {
+      "model": "kinetics:block/drill_block"
+    },
+    "facing=south": {
+      "model": "kinetics:block/drill_block"
+    },
+    "facing=up": {
+      "model": "kinetics:block/drill_block"
+    },
+    "facing=west": {
+      "model": "kinetics:block/drill_block"
+    }
+  }
+}

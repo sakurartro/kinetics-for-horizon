@@ -83,7 +83,17 @@ path = "mixins/kinetics/speedometer.rs"
 name = "water_wheel"
 path = "mixins/kinetics/water_wheel.rs"
 
+# The mechanical drill's pure rules (breaking, placement), also added to the game as `game::kinetics_drill`.
+[[test]]
+name = "drill"
+path = "mixins/kinetics/drill.rs"
+
 # The shaft placement helper's pure rules, also added to the game as `game::kinetics_assist`.
 [[test]]
 name = "assist"
 path = "mixins/kinetics/assist.rs"
+
+# Contraptions' pure rules (assembly, motion), also added to the game as `game::kinetics_contraption`.
+[[test]]
+name = "contraption"
+path = "mixins/kinetics/contraption.rs"

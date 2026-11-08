@@ -6,7 +6,7 @@ Not affiliated with the Create team.
 
 ## Scope
 
-This is the rotation core, not the whole of Create. Included: shafts, cogwheels, casings, gearboxes, clutch and gearshift, chain drives, brackets, girders, water wheels, hand crank, creative motor, rotation source, rotation speed controller, flywheel, cuckoo clocks, stress, gauges, wrench and goggles. Not included: belts, fluids, contraptions, trains, crafting machines, the rest of Create's content. Those need systems Horizon's mod API doesn't have yet, and the core had to work first.
+This is the rotation core, not the whole of Create. Included: shafts, cogwheels, casings, gearboxes, clutch and gearshift, chain drives, brackets, girders, water wheels, hand crank, creative motor, rotation source, rotation speed controller, flywheel, cuckoo clocks, stress, gauges, wrench and goggles, and a first, untested set of moving structures: mechanical drill, super glue, mechanical piston, mechanical bearing and cart assembler (see BUR.md). Not included: belts, fluids, trains, chests and other blocks with contents on a moving structure, collision of players with it, crafting machines, the rest of Create's content. Those need systems Horizon's mod API doesn't have yet, and the core had to work first.
 
 Rotation rules follow Create: speed travels along shafts, meshing cogwheels reverse direction, large↔small gives ×2/×½, a conflict stops the network.
 

@@ -1,0 +1,90 @@
+{
+  "variants": {
+    "backwards=false,powered=false,shape=ascending_east": {
+      "model": "kinetics:block/cart_assembler_raised_ne",
+      "y": 90
+    },
+    "backwards=false,powered=false,shape=ascending_north": {
+      "model": "kinetics:block/cart_assembler_raised_ne"
+    },
+    "backwards=false,powered=false,shape=ascending_south": {
+      "model": "kinetics:block/cart_assembler_raised_sw"
+    },
+    "backwards=false,powered=false,shape=ascending_west": {
+      "model": "kinetics:block/cart_assembler_raised_sw",
+      "y": 90
+    },
+    "backwards=false,powered=false,shape=east_west": {
+      "model": "kinetics:block/cart_assembler",
+      "y": 270
+    },
+    "backwards=false,powered=false,shape=north_south": {
+      "model": "kinetics:block/cart_assembler"
+    },
+    "backwards=false,powered=true,shape=ascending_east": {
+      "model": "kinetics:block/cart_assembler_on_raised_ne",
+      "y": 90
+    },
+    "backwards=false,powered=true,shape=ascending_north": {
+      "model": "kinetics:block/cart_assembler_on_raised_ne"
+    },
+    "backwards=false,powered=true,shape=ascending_south": {
+      "model": "kinetics:block/cart_assembler_on_raised_sw"
+    },
+    "backwards=false,powered=true,shape=ascending_west": {
+      "model": "kinetics:block/cart_assembler_on_raised_sw",
+      "y": 90
+    },
+    "backwards=false,powered=true,shape=east_west": {
+      "model": "kinetics:block/cart_assembler_on",
+      "y": 270
+    },
+    "backwards=false,powered=true,shape=north_south": {
+      "model": "kinetics:block/cart_assembler_on"
+    },
+    "backwards=true,powered=false,shape=ascending_east": {
+      "model": "kinetics:block/cart_assembler_raised_ne",
+      "y": 90
+    },
+    "backwards=true,powered=false,shape=ascending_north": {
+      "model": "kinetics:block/cart_assembler_raised_ne"
+    },
+    "backwards=true,powered=false,shape=ascending_south": {
+      "model": "kinetics:block/cart_assembler_raised_sw"
+    },
+    "backwards=true,powered=false,shape=ascending_west": {
+      "model": "kinetics:block/cart_assembler_raised_sw",
+      "y": 90
+    },
+    "backwards=true,powered=false,shape=east_west": {
+      "model": "kinetics:block/cart_assembler",
+      "y": 90
+    },
+    "backwards=true,powered=false,shape=north_south": {
+      "model": "kinetics:block/cart_assembler",
+      "y": 180
+    },
+    "backwards=true,powered=true,shape=ascending_east": {
+      "model": "kinetics:block/cart_assembler_on_raised_ne",
+      "y": 90
+    },
+    "backwards=true,powered=true,shape=ascending_north": {
+      "model": "kinetics:block/cart_assembler_on_raised_ne"
+    },
+    "backwards=true,powered=true,shape=ascending_south": {
+      "model": "kinetics:block/cart_assembler_on_raised_sw"
+    },
+    "backwards=true,powered=true,shape=ascending_west": {
+      "model": "kinetics:block/cart_assembler_on_raised_sw",
+      "y": 90
+    },
+    "backwards=true,powered=true,shape=east_west": {
+      "model": "kinetics:block/cart_assembler_on",
+      "y": 90
+    },
+    "backwards=true,powered=true,shape=north_south": {
+      "model": "kinetics:block/cart_assembler_on",
+      "y": 180
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "kinetics:block/piston_extension_pole"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "variants": {
+    "facing=down": {
+      "model": "kinetics:block/mechanical_piston"
+    },
+    "facing=east": {
+      "model": "kinetics:block/mechanical_piston"
+    },
+    "facing=north": {
+      "model": "kinetics:block/mechanical_piston"
+    },
+    "facing=south": {
+      "model": "kinetics:block/mechanical_piston"
+    },
+    "facing=up": {
+      "model": "kinetics:block/mechanical_piston"
+    },
+    "facing=west": {
+      "model": "kinetics:block/mechanical_piston"
+    }
+  }
+}

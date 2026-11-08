@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "A": "minecraft:andesite",
+    "I": "minecraft:iron_ingot"
+  },
+  "pattern": [
+    "I",
+    "A",
+    "I"
+  ],
+  "result": {
+    "id": "kinetics:piston_extension_pole",
+    "count": 8
+  }
+}

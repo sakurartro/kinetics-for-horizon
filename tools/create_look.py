@@ -36,6 +36,7 @@ MODELS += [f"andesite_encased_{big}cogwheel{ends}" for big in ("", "large_")
 MODELS += ["hand_crank/handle"]  # crank.rs LOOK_MODELS (its shaft_half is the casing's)
 # The cuckoo clocks (clock.rs LOOK_MODELS).
 MODELS += [f"cuckoo_clock/{m}" for m in ("block", "hour_hand", "minute_hand", "left_door", "right_door", "pig", "creeper")]
+MODELS += ["mechanical_drill/block", "mechanical_drill/head"]  # drill.rs LOOK_MODELS (body built up, head south)
 MODELS += ["water_wheel/block"]  # water_wheel.rs LOOK_FRAME (the wheels themselves are OBJ models, which the game does not draw)
 # The gearbox's and the split blocks' static models (gearbox.rs STATIC_LOOK, clutch.rs STATIC_LOOK_MODELS).
 MODELS += ["gearbox/block", "clutch/block", "clutch/block_powered", "gearshift/block", "gearshift/block_powered"]
@@ -116,6 +117,16 @@ def build_local_mod(source, out, extracted_assets, create_items):
         item.setdefault("model", {})["model"] = f"create:item/{item_model}"
         entries[rel] = (json.dumps(item, indent=2) + "\n").encode()
         replaced.append(item_model)
+
+    # A moving contraption shows its blocks as block displays: only blockstate models, none of what block entities draw
+    # over them. So the casings' placeholders become Create's cubes (the static look drawn over them is the same), and
+    # the drill's display block (contraption_tick.rs) Create's whole drill, its item model, built facing south.
+    for casing in ("andesite_casing", "brass_casing", "copper_casing"):
+        entries[f"assets/kinetics/models/block/{casing}.json"] = json.dumps({"parent": f"create:block/{casing}"}).encode()
+    if "mechanical_drill" in create_items:
+        turns = {"south": {}, "north": {"y": 180}, "east": {"y": 270}, "west": {"y": 90}, "up": {"x": 90}, "down": {"x": 270}}
+        entries["assets/kinetics/blockstates/drill_display.json"] = json.dumps({"variants": {
+            f"facing={f}": {"model": "create:block/mechanical_drill/item", **r} for f, r in turns.items()}}, indent=2).encode()
 
     entries.update(extracted_assets)
     out.parent.mkdir(parents=True, exist_ok=True)

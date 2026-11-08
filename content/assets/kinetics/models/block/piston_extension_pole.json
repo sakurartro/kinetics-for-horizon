@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cube_column",
+  "textures": {
+    "end": "minecraft:block/piston_top",
+    "side": "minecraft:block/piston_side"
+  }
+}

@@ -36,5 +36,15 @@
   "itemGroup.kinetics.kinetics": "Кинетика",
   "block.kinetics.water_wheel": "Водяное колесо",
   "block.kinetics.large_water_wheel": "Большое водяное колесо",
-  "block.kinetics.water_wheel_structure": "Большое водяное колесо"
+  "block.kinetics.water_wheel_structure": "Большое водяное колесо",
+  "block.kinetics.mechanical_drill": "Механический бур",
+  "block.kinetics.drill_display": "Механический бур",
+  "item.kinetics.super_glue": "Суперклей",
+  "block.kinetics.mechanical_piston": "Механический поршень",
+  "block.kinetics.piston_extension_pole": "Штанга поршня",
+  "block.kinetics.mechanical_bearing": "Механический подшипник",
+  "block.kinetics.cart_assembler": "Сборщик вагонеток",
+  "item.kinetics.minecart_contraption": "Вагонеточная штуковина",
+  "item.kinetics.furnace_minecart_contraption": "Самоходная вагонеточная штуковина",
+  "item.kinetics.chest_minecart_contraption": "Грузовая вагонеточная штуковина"
 }

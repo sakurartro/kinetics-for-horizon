@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": ["minecraft:iron_ingot", "minecraft:slime_ball"],
+  "result": { "count": 1, "id": "kinetics:super_glue" }
+}

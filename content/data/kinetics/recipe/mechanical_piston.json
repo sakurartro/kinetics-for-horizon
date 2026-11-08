@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "A": "minecraft:andesite",
+    "C": "kinetics:andesite_casing",
+    "P": "minecraft:piston",
+    "S": "kinetics:shaft"
+  },
+  "pattern": [
+    " P ",
+    "ASA",
+    " C "
+  ],
+  "result": {
+    "id": "kinetics:mechanical_piston",
+    "count": 1
+  }
+}

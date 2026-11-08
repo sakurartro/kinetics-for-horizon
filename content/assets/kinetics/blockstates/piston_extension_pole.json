@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "axis=x": {
+      "model": "kinetics:block/piston_extension_pole",
+      "x": 90,
+      "y": 90
+    },
+    "axis=y": {
+      "model": "kinetics:block/piston_extension_pole"
+    },
+    "axis=z": {
+      "model": "kinetics:block/piston_extension_pole",
+      "x": 90
+    }
+  }
+}

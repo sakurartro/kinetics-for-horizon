@@ -98,8 +98,8 @@ pub fn kind_of(name: &str) -> Option<Kind> {
         "clutch" => Some(Kind::Clutch(false)),
         "gearshift" => Some(Kind::Gearshift(false)),
         "gearbox" => Some(Kind::Gearbox),
-        // The cuckoo clocks are consumers with a shaft at the back, like a crank at rest.
-        "hand_crank" | "cuckoo_clock" | "mysterious_cuckoo_clock" => Some(Kind::Crank { toward: 1, rpm: 0 }),
+        // The cuckoo clocks and the drill are consumers with a shaft at the back, like a crank at rest.
+        "hand_crank" | "cuckoo_clock" | "mysterious_cuckoo_clock" | "mechanical_drill" | "mechanical_piston" | "mechanical_bearing" => Some(Kind::Crank { toward: 1, rpm: 0 }),
         "creative_motor" => Some(Kind::Motor { toward: 1, rpm: 16 }),
         "rotation_speed_controller" => Some(Kind::Controller { rpm: 16 }),
         "encased_chain_drive" | "adjustable_chain_gearshift" => Some(Kind::Chain { signal: 0, conn: 3, ends: [false; 2] }),

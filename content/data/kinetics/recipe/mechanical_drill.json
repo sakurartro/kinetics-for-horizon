@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "A": "minecraft:andesite",
+    "I": "minecraft:iron_ingot",
+    "C": "kinetics:andesite_casing"
+  },
+  "pattern": [
+    " A ",
+    "AIA",
+    " C "
+  ],
+  "result": {
+    "id": "kinetics:mechanical_drill",
+    "count": 1
+  }
+}

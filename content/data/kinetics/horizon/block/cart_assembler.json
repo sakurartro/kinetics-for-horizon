@@ -1,0 +1,14 @@
+{
+  "template": "minecraft:powered_rail",
+  "properties": {
+    "hardness": 1.5,
+    "explosion_resistance": 6.0,
+    "sounds": "minecraft:andesite"
+  },
+  "item": true,
+  "state_properties": {
+    "backwards": {
+      "type": "boolean"
+    }
+  }
+}

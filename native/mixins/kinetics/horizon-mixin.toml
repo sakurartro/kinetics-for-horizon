@@ -1015,3 +1015,225 @@ bindings = [
   { name = "pos", ty = "[i32; 3]", value = "pos" },
   { name = "claimed", ty = "&mut bool", value = "&mut *claimed" },
 ]
+
+# The mechanical drill. A new block `kinetics:mechanical_drill` with a `facing`: its rules are in drill.rs (module
+# `kinetics_drill`), the injections below are its hooks. The solver treats it as a consumer with its shaft at the
+# back (runtime.rs `kind_of`, settle.rs), its stress impact is in stress.rs.
+[[module]]
+id = "drill"
+file = "crates/horizon-client/src/game.rs"
+name = "kinetics_drill"
+source = "drill.rs"
+
+# Placed with its back to a shaft beside it, else its head toward the player.
+[[injection]]
+id = "drill-place"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::GameLevel<'_>::native_state_for_placement"
+helper = "drill_place.rs"
+bindings = [
+  { name = "level", ty = "&GameLevel<'_>", value = "&*self" },
+  { name = "state", ty = "BlockStateId", value = "state" },
+  { name = "context", ty = "&PlacementContext", value = "context" },
+  { name = "answer", ty = "&mut Option<Option<BlockStateId>>", value = "&mut *answer" },
+]
+
+# Every tick of a drill: it hits and breaks the block in front of it.
+[[injection]]
+id = "drill-tick"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_block_entity_tick"
+helper = "drill_tick.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+  { name = "entity", ty = "&mut ModBlockEntity", value = "&mut *entity" },
+]
+
+# The drills' block entities ask to tick.
+[[injection]]
+id = "drill-ticks"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_block_entity_ticks"
+helper = "drill_ticks.rs"
+bindings = [
+  { name = "block", ty = "&str", value = "block" },
+  { name = "ticks", ty = "&mut bool", value = "&mut *ticks" },
+]
+
+# The drill's body and head, baked beside the block models.
+[[injection]]
+id = "drill-models"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_standalone_models"
+helper = "drill_models.rs"
+bindings = [
+  { name = "models", ty = "&mut Vec<String>", value = "&mut *models" },
+]
+
+# Each frame: the body and the turning head.
+[[injection]]
+id = "drill-submit"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_block_entity_submit"
+helper = "drill_submit.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+  { name = "block", ty = "&str", value = "block" },
+  { name = "state", ty = "BlockStateId", value = "state" },
+  { name = "entity", ty = "&ModBlockEntity", value = "entity" },
+  { name = "draw", ty = "&mut BlockEntityDraw", value = "&mut *draw" },
+]
+
+# Contraptions (BUR.md phase 2): blocks taken out of the world move as displays and are put back. The rules and the
+# ids kept in memory are contraption.rs (module `kinetics_contraption`); the snapshot is a marker entity's data.
+[[module]]
+id = "contraption"
+file = "crates/horizon-client/src/game.rs"
+name = "kinetics_contraption"
+source = "contraption.rs"
+
+# The debug command until the piston and the glue come: registered for operators, run on the server.
+[[injection]]
+id = "contraption-commands"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_register_commands"
+helper = "contraption_commands.rs"
+bindings = [
+  { name = "commands", ty = "&mut Vec<NativeCommand>", value = "&mut *commands" },
+]
+
+[[injection]]
+id = "contraption-command"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_perform_command"
+helper = "contraption_command.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "player", ty = "&NativeServerPlayer", value = "player" },
+  { name = "command", ty = "&str", value = "command" },
+  { name = "ran", ty = "&mut bool", value = "&mut *ran" },
+]
+
+# At the end of each level's tick: displays made, steps, blocks put back.
+[[injection]]
+id = "contraption-tick"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_level_tick_post"
+helper = "contraption_tick.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "dimension", ty = "&str", value = "dimension" },
+]
+
+# A level opened: its entity ids are new.
+[[injection]]
+id = "contraption-load"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_level_load"
+helper = "contraption_load.rs"
+bindings = [
+  { name = "dimension", ty = "&str", value = "dimension" },
+]
+
+# Super glue (BUR.md phase 4): two clicks glue a box, stored as a marker entity (contraption.rs GLUE_TAG).
+[[injection]]
+id = "glue-use"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_use_item_on"
+helper = "glue_use.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "stack", ty = "&ItemStack", value = "stack" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+  { name = "claimed", ty = "&mut bool", value = "&mut *claimed" },
+]
+
+# Every tick of a piston: it asks the contraption machinery to move what is glued in front of it.
+[[injection]]
+id = "piston-tick"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_block_entity_tick"
+helper = "piston_tick.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+  { name = "entity", ty = "&mut ModBlockEntity", value = "&mut *entity" },
+]
+
+# Every tick of a bearing: it asks the contraption machinery to turn what is glued in front of it.
+[[injection]]
+id = "bearing-tick"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_block_entity_tick"
+helper = "bearing_tick.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+  { name = "entity", ty = "&mut ModBlockEntity", value = "&mut *entity" },
+]
+
+# Every tick of a cart assembler: a minecart on it gets what is glued above it (powered) or is braked (not).
+[[injection]]
+id = "assembler-tick"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_block_entity_tick"
+helper = "assembler_tick.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+  { name = "entity", ty = "&mut ModBlockEntity", value = "&mut *entity" },
+]
+
+# Minecarts ride a cart assembler as a rail (the game's carts know vanilla's rails by name).
+[[injection]]
+id = "cart-rail"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::minecarts::Game<'_>::rail"
+helper = "cart_rail.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "x", ty = "i32", value = "x" },
+  { name = "y", ty = "i32", value = "y" },
+  { name = "z", ty = "i32", value = "z" },
+]
+
+# A cart a contraption rides is ridden.
+[[injection]]
+id = "cart-vehicle"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::minecarts::Game<'_>::cart_is_vehicle"
+helper = "cart_vehicle.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "id", ty = "u32", value = "id" },
+]
+
+# The wrench on a cart a contraption rides takes both as a minecart contraption item; a cart with one isn't boarded.
+[[injection]]
+id = "cart-pickup"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::minecarts::Game<'_>::interact_cart"
+helper = "cart_pickup.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "target", ty = "Option<InteractTarget>", value = "target" },
+]
+
+# A minecart contraption item on a rail: its cart, and the contraption riding it again.
+[[injection]]
+id = "cart-place"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_use_item_on"
+helper = "cart_place.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "stack", ty = "&ItemStack", value = "stack" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+  { name = "face", ty = "[i32; 3]", value = "face" },
+  { name = "claimed", ty = "&mut bool", value = "&mut *claimed" },
+]

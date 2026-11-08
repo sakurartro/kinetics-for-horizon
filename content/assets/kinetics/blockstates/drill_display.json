@@ -1,0 +1,30 @@
+{
+  "variants": {
+    "facing=up": {
+      "model": "kinetics:block/drill_item"
+    },
+    "facing=down": {
+      "model": "kinetics:block/drill_item",
+      "x": 180
+    },
+    "facing=north": {
+      "model": "kinetics:block/drill_item",
+      "x": 90
+    },
+    "facing=east": {
+      "model": "kinetics:block/drill_item",
+      "x": 90,
+      "y": 90
+    },
+    "facing=south": {
+      "model": "kinetics:block/drill_item",
+      "x": 90,
+      "y": 180
+    },
+    "facing=west": {
+      "model": "kinetics:block/drill_item",
+      "x": 90,
+      "y": 270
+    }
+  }
+}

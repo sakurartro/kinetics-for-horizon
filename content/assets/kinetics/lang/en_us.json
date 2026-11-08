@@ -36,5 +36,15 @@
   "itemGroup.kinetics.kinetics": "Kinetics",
   "block.kinetics.water_wheel": "Water Wheel",
   "block.kinetics.large_water_wheel": "Large Water Wheel",
-  "block.kinetics.water_wheel_structure": "Large Water Wheel"
+  "block.kinetics.water_wheel_structure": "Large Water Wheel",
+  "block.kinetics.mechanical_drill": "Mechanical Drill",
+  "block.kinetics.drill_display": "Mechanical Drill",
+  "item.kinetics.super_glue": "Super Glue",
+  "block.kinetics.mechanical_piston": "Mechanical Piston",
+  "block.kinetics.piston_extension_pole": "Piston Extension Pole",
+  "block.kinetics.mechanical_bearing": "Mechanical Bearing",
+  "block.kinetics.cart_assembler": "Cart Assembler",
+  "item.kinetics.minecart_contraption": "Minecart Contraption",
+  "item.kinetics.furnace_minecart_contraption": "Furnace Minecart Contraption",
+  "item.kinetics.chest_minecart_contraption": "Chest Minecart Contraption"
 }

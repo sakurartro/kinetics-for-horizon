@@ -141,6 +141,17 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
         data.insert("offset".into(), doubles([0.0; 3]));
         data.insert("target".into(), doubles(r.by.map(f64::from)));
         data.insert("speed".into(), Tag::Double(r.speed.to_bits()));
+        if let Some(axis) = r.spin {
+            // A bearing's: turns about `axis` through the anchor, its speed read from the bearing each tick.
+            data.insert("axis".into(), Tag::IntArray(axis.to_vec()));
+            data.insert("angle".into(), Tag::Double(0f64.to_bits()));
+            if let Some((p, _, _)) = r.owner {
+                data.insert("bearing".into(), Tag::IntArray(p.to_vec()));
+            }
+        }
+        if let Some(h) = r.cart {
+            data.insert("heading".into(), Tag::IntArray(h.to_vec()));
+        }
         data.insert("pieces".into(), Tag::List(pieces));
         data.insert(
             "glue".into(),
@@ -165,9 +176,9 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
         for p in &blocks {
             game.native_set_block(&r.dimension, *p, air, c::REMOVE_FLAGS);
         }
-        if let Some((p, value)) = r.owner {
+        if let Some((p, key, value)) = r.owner {
             if let Some(BlockEntity::Mod(m)) = game.world.block_entities.get_mut(&(p[0], p[1], p[2])) {
-                m.nbt.insert(JavaString::from(c::EXTENDED_KEY), Tag::Int(value));
+                m.nbt.insert(JavaString::from(key), Tag::Int(value));
             }
         }
         say(game, format!("{} blocks move by {:?}", blocks.len(), r.by));
@@ -180,7 +191,7 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
         l: &mut crate::game::kinetics_contraption::Live,
         alive: &std::collections::HashSet<u32>,
     ) -> bool {
-        use crate::game::{kinetics_contraption as c, kinetics_drill as d, kinetics_motor as m};
+        use crate::game::kinetics_contraption as c;
         use horizon_world::nbt::Tag;
         let Some(data) = game.persist.raw.get(&l.marker).and_then(|t| t.get("data")).cloned() else {
             return false;
@@ -229,8 +240,15 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
                 }
             }
         }
+        if let Some(axis) = ints("axis") {
+            return c_spin(game, dimension, l, &data, origin, axis, list);
+        }
         if offset == target {
-            return c_place(game, dimension, l, origin, offset, list, &data);
+            // A cart that got to a rail goes on to the next, else it is put down where it is.
+            if data.get("heading").is_some() && c_cart(game, l.marker, origin, offset, &data) {
+                return true;
+            }
+            return c_place(game, dimension, l, origin, offset, list, &data, None);
         }
         let speed = match data.get("speed") {
             Some(Tag::Double(b)) => f64::from_bits(*b),
@@ -247,16 +265,11 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
         // What is in the way (BUR.md phase 3): drills facing the motion break what they enter while it waits
         // (Create's `BlockBreakingMovementBehaviour`), a solid block anything else touches stops it.
         let motion = [0, 1, 2].map(|i| next[i] - offset[i]);
-        let facing = |p: &Tag| match p.get("state").map(|s| (s.get("Name"), s.get("Properties").and_then(|x| x.get("facing")))) {
-            Some((Some(Tag::String(n)), Some(Tag::String(f)))) if n.to_string_lossy() == d::BLOCK => m::dir_vec(&f.to_string_lossy()),
-            _ => None,
-        };
-        let pieces: Vec<([f64; 3], bool)> =
-            list.iter().map(|p| (at(next, rel(p)), facing(p).is_some_and(|f| c::drills_toward(f, motion)))).collect();
-        let way = c::way(&pieces, |q| {
-            let f = game.res.facts().get(game.world.block(q[0], q[1], q[2]));
-            c::InWay { solid: f.legacy_solid, breakable: d::breakable(&f.name, f.hardness, f.has_class("LiquidBlock")) }
-        });
+        let pieces: Vec<([f64; 3], bool)> = list
+            .iter()
+            .map(|p| (at(next, rel(p)), c_facing(p).is_some_and(|f| c::drills_toward(f.map(f64::from), motion))))
+            .collect();
+        let way = c::way(&pieces, |q| c_in_way(game, q));
         if way.blocked || !way.drill.is_empty() {
             for (i, cell) in way.drill {
                 c_drill(game, l.marker, i, &list[i], cell, c::drill_rpm(speed));
@@ -269,6 +282,140 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
         }
         if let Some(Tag::Compound(d)) = game.persist.raw.get_mut(&l.marker).and_then(|t| t.get_mut("data")) {
             d.insert("offset".into(), Tag::List(next.iter().map(|x| Tag::Double(x.to_bits())).collect()));
+        }
+        true
+    }
+
+    /// The way a drill piece faces, if the piece is one.
+    fn c_facing(p: &horizon_world::nbt::Tag) -> Option<[i32; 3]> {
+        use crate::game::{kinetics_drill as d, kinetics_motor as m};
+        use horizon_world::nbt::Tag;
+        match p.get("state").map(|s| (s.get("Name"), s.get("Properties").and_then(|x| x.get("facing")))) {
+            Some((Some(Tag::String(n)), Some(Tag::String(f)))) if n.to_string_lossy() == d::BLOCK => m::dir_vec(&f.to_string_lossy()),
+            _ => None,
+        }
+    }
+
+    /// What the world block at `q` is to a contraption entering it.
+    fn c_in_way(game: &crate::game::Game<'_>, q: [i32; 3]) -> crate::game::kinetics_contraption::InWay {
+        use crate::game::{kinetics_contraption as c, kinetics_drill as d};
+        let f = game.res.facts().get(game.world.block(q[0], q[1], q[2]));
+        c::InWay { solid: f.legacy_solid, breakable: d::breakable(&f.name, f.hardness, f.has_class("LiquidBlock")) }
+    }
+
+    /// A cart got to the rail under its anchor (BUR.md phase 5): work out the next rail and write the next leg (`target`,
+    /// `heading`, `speed`) into the marker. False to stop: no rail goes on, it is too slow, a powered rail is off, or it
+    /// is on an assembler with no signal (Create: that one takes the cart apart).
+    fn c_cart(game: &mut crate::game::Game<'_>, marker: u32, origin: [i32; 3], offset: [f64; 3], data: &horizon_world::nbt::Tag) -> bool {
+        use crate::game::kinetics_contraption as c;
+        use horizon_world::nbt::Tag;
+        let heading = match data.get("heading") {
+            Some(Tag::IntArray(v)) if v.len() == 3 => [v[0], v[1], v[2]],
+            _ => return false,
+        };
+        let speed = match data.get("speed") {
+            Some(Tag::Double(b)) => f64::from_bits(*b),
+            _ => 0.0,
+        };
+        let at = c::landing(origin, offset, [0, -1, 0]);
+        let name = game.res.facts().get(game.world.block(at[0], at[1], at[2])).name.to_string();
+        let powered = game.native_block_property(at, "powered").as_deref() == Some("true");
+        if name == c::ASSEMBLER && !powered {
+            return false;
+        }
+        let shape = game.native_block_property(at, "shape").unwrap_or_default();
+        let Some((next, new_heading)) = c::cart_next(at, &shape, heading, |p| {
+            c::is_rail(&game.res.facts().get(game.world.block(p[0], p[1], p[2])).name)
+        }) else {
+            return false;
+        };
+        let speed = c::cart_speed(speed, (name == "minecraft:powered_rail").then_some(powered), next[1] - at[1]);
+        if speed == 0.0 {
+            return false;
+        }
+        if let Some(Tag::Compound(d)) = game.persist.raw.get_mut(&marker).and_then(|t| t.get_mut("data")) {
+            let goal = [0, 1, 2].map(|i| offset[i] + f64::from(next[i] - at[i]));
+            d.insert("target".into(), Tag::List(goal.iter().map(|x| Tag::Double(x.to_bits())).collect()));
+            d.insert("heading".into(), Tag::IntArray(new_heading.to_vec()));
+            d.insert("speed".into(), Tag::Double(speed.to_bits()));
+        }
+        true
+    }
+
+    /// A turning contraption's tick (BUR.md phase 6, Create's `MechanicalBearingBlockEntity`): the bearing's speed turns
+    /// it about the axis through its anchor, drills dig where they go and anything else solid holds it back; with the
+    /// bearing still it settles on a quarter turn and is put down turned.
+    fn c_spin(
+        game: &mut crate::game::Game<'_>,
+        dimension: &str,
+        l: &mut crate::game::kinetics_contraption::Live,
+        data: &horizon_world::nbt::Tag,
+        origin: [i32; 3],
+        axis: [i32; 3],
+        list: &[horizon_world::nbt::Tag],
+    ) -> bool {
+        use crate::game::native_entities::NativeDisplay;
+        use crate::game::{kinetics as k, kinetics_contraption as c};
+        use horizon_world::nbt::{JavaString, Tag};
+        let angle = match data.get("angle") {
+            Some(Tag::Double(b)) => f64::from_bits(*b),
+            _ => 0.0,
+        };
+        // The bearing's speed; a bearing that is gone reads as still.
+        let rpm = match data.get("bearing") {
+            Some(Tag::IntArray(v)) if v.len() == 3 => match game.world.block_entities.get(&(v[0], v[1], v[2])) {
+                Some(BlockEntity::Mod(m)) => match m.nbt.get(&JavaString::from(k::SPEED_KEY)) {
+                    Some(Tag::Float(b)) => f32::from_bits(*b),
+                    _ => 0.0,
+                },
+                _ => 0.0,
+            },
+            _ => 0.0,
+        };
+        let (next, rest) = c::spin_step(angle, rpm);
+        if rest {
+            let quarters = (next / 90.0).round() as i32;
+            return c_place(game, dimension, l, origin, [0.0; 3], list, data, Some((axis, quarters)));
+        }
+        let centre = origin.map(|v| f64::from(v) + 0.5);
+        let rel = |p: &Tag| match p.get("pos") {
+            Some(Tag::IntArray(v)) if v.len() == 3 => [v[0], v[1], v[2]],
+            _ => [0; 3],
+        };
+        let centre_at = |a: f64, r: [i32; 3]| {
+            let v = c::rotate(r.map(f64::from), axis, a);
+            [0, 1, 2].map(|i| centre[i] + v[i])
+        };
+        let mut pieces = Vec::new();
+        let mut motions = Vec::new();
+        for p in list {
+            let (from, to) = (centre_at(angle, rel(p)), centre_at(next, rel(p)));
+            let motion = [0, 1, 2].map(|i| to[i] - from[i]);
+            let drill = c_facing(p).is_some_and(|f| c::drills_toward(c::rotate(f.map(f64::from), axis, next), motion));
+            pieces.push((to.map(|v| v - 0.5), drill));
+            motions.push(motion);
+        }
+        // Stop at the edge of the loaded world, like the straight ones.
+        if !pieces.iter().all(|(q, _)| game.world.chunks.contains_key(&c::chunk_of(q[0], q[2]))) {
+            return true;
+        }
+        let way = c::way(&pieces, |q| c_in_way(game, q));
+        if way.blocked || !way.drill.is_empty() {
+            for (i, cell) in way.drill {
+                let m = motions[i];
+                c_drill(game, l.marker, i, &list[i], cell, c::drill_rpm((m[0] * m[0] + m[1] * m[1] + m[2] * m[2]).sqrt()));
+            }
+            return true;
+        }
+        // A display turns about its own corner: put it on the block's centre and shift its corner back by the turn.
+        let corner = c::rotate([-0.5; 3], axis, next).map(|v| v as f32);
+        let shown = NativeDisplay { translation: corner, left_rotation: c::quaternion(axis, next), interpolation: 1, teleport: 1, ..Default::default() };
+        for (id, q) in l.displays.iter().zip(&pieces) {
+            game.native_move_entity(dimension, *id, q.0.map(|v| v + 0.5), 0.0, 0.0);
+            game.native_set_display(dimension, *id, &shown);
+        }
+        if let Some(Tag::Compound(d)) = game.persist.raw.get_mut(&l.marker).and_then(|t| t.get_mut("data")) {
+            d.insert("angle".into(), Tag::Double(next.to_bits()));
         }
         true
     }
@@ -330,15 +477,28 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
         offset: [f64; 3],
         list: &[horizon_world::nbt::Tag],
         data: &horizon_world::nbt::Tag,
+        spin: Option<([i32; 3], i32)>,
     ) -> bool {
         use crate::game::kinetics_contraption as c;
         use horizon_world::nbt::Tag;
+        // A bearing's blocks land turned by the quarter turns it made, and so do their `facing` and `axis`.
+        let turned = |v: [i32; 3]| spin.map_or(v, |(axis, q)| c::turn(v, axis, q));
         for p in list {
             let r = match p.get("pos") {
-                Some(Tag::IntArray(v)) if v.len() == 3 => [v[0], v[1], v[2]],
+                Some(Tag::IntArray(v)) if v.len() == 3 => turned([v[0], v[1], v[2]]),
                 _ => continue,
             };
-            let Some(state) = p.get("state").and_then(|s| game.state_from_nbt(s)) else { continue };
+            let mut st = p.get("state").cloned().unwrap_or(Tag::Compound(Compound::new()));
+            if let (Some((axis, q)), Some(Tag::Compound(props))) = (spin, st.get_mut("Properties")) {
+                for (key, value) in props.iter_mut() {
+                    if let Tag::String(v) = value {
+                        if let Some(t) = c::turn_property(&key.to_string_lossy(), &v.to_string_lossy(), axis, q) {
+                            *value = Tag::String(t.as_str().into());
+                        }
+                    }
+                }
+            }
+            let Some(state) = game.state_from_nbt(&st) else { continue };
             let at = c::landing(origin, offset, r);
             let facts = game.res.facts().get(game.world.block(at[0], at[1], at[2]));
             let free = c::movable(&facts.name, facts.hardness, facts.has_class("LiquidBlock"), false) == c::Movable::Skip;
@@ -362,11 +522,15 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
         }
         // The glue comes back where the blocks are.
         if let Some(Tag::List(boxes)) = data.get("glue") {
-            let at = |v: &[i32], k: usize| [0, 1, 2].map(|i| c::landing(origin, offset, [0; 3])[i] + v[k + i]);
+            let at = |v: &[i32], k: usize| {
+                let r = turned([v[k], v[k + 1], v[k + 2]]);
+                [0, 1, 2].map(|i| c::landing(origin, offset, [0; 3])[i] + r[i])
+            };
             for b in boxes {
                 if let Tag::IntArray(v) = b {
                     if v.len() == 6 {
-                        let (min, max) = (at(v, 0), at(v, 3));
+                        let g = c::Glue::new(at(v, 0), at(v, 3));
+                        let (min, max) = (g.min, g.max);
                         let mut d = Compound::new();
                         d.insert("min".into(), Tag::IntArray(min.to_vec()));
                         d.insert("max".into(), Tag::IntArray(max.to_vec()));
@@ -376,6 +540,12 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
                         game.native_summon(dimension, "minecraft:marker", min.map(f64::from), nbt);
                     }
                 }
+            }
+        }
+        // A bearing can start another turn.
+        if let Some(Tag::IntArray(v)) = data.get("bearing") {
+            if let (true, Some(BlockEntity::Mod(m))) = (v.len() == 3, game.world.block_entities.get_mut(&(v[0], v[1], v[2]))) {
+                m.nbt.insert(horizon_world::nbt::JavaString::from(c::RUNNING_KEY), Tag::Int(0));
             }
         }
         for id in l.displays.drain(..) {

@@ -40,5 +40,7 @@
   "block.kinetics.mechanical_drill": "Механический бур",
   "item.kinetics.super_glue": "Суперклей",
   "block.kinetics.mechanical_piston": "Механический поршень",
-  "block.kinetics.piston_extension_pole": "Штанга поршня"
+  "block.kinetics.piston_extension_pole": "Штанга поршня",
+  "block.kinetics.mechanical_bearing": "Механический подшипник",
+  "block.kinetics.cart_assembler": "Сборщик вагонеток"
 }

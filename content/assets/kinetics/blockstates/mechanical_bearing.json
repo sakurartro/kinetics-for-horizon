@@ -1,0 +1,40 @@
+{
+  "variants": {
+    "facing=down,waterlogged=false": {
+      "model": "kinetics:block/mechanical_bearing"
+    },
+    "facing=down,waterlogged=true": {
+      "model": "kinetics:block/mechanical_bearing"
+    },
+    "facing=east,waterlogged=false": {
+      "model": "kinetics:block/mechanical_bearing"
+    },
+    "facing=east,waterlogged=true": {
+      "model": "kinetics:block/mechanical_bearing"
+    },
+    "facing=north,waterlogged=false": {
+      "model": "kinetics:block/mechanical_bearing"
+    },
+    "facing=north,waterlogged=true": {
+      "model": "kinetics:block/mechanical_bearing"
+    },
+    "facing=south,waterlogged=false": {
+      "model": "kinetics:block/mechanical_bearing"
+    },
+    "facing=south,waterlogged=true": {
+      "model": "kinetics:block/mechanical_bearing"
+    },
+    "facing=up,waterlogged=false": {
+      "model": "kinetics:block/mechanical_bearing"
+    },
+    "facing=up,waterlogged=true": {
+      "model": "kinetics:block/mechanical_bearing"
+    },
+    "facing=west,waterlogged=false": {
+      "model": "kinetics:block/mechanical_bearing"
+    },
+    "facing=west,waterlogged=true": {
+      "model": "kinetics:block/mechanical_bearing"
+    }
+  }
+}

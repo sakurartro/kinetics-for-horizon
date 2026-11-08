@@ -45,6 +45,8 @@ fn kinetics_piston_tick(game: &mut crate::game::Game<'_>, pos: [i32; 3], entity:
         speed: v.abs(),
         extra: None,
         feedback: false,
-        owner: Some((pos, i32::from(!extended))),
+        owner: Some((pos, c::EXTENDED_KEY, i32::from(!extended))),
+        spin: None,
+        cart: None,
     });
 }

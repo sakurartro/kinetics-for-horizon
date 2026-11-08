@@ -40,5 +40,7 @@
   "block.kinetics.mechanical_drill": "Mechanical Drill",
   "item.kinetics.super_glue": "Super Glue",
   "block.kinetics.mechanical_piston": "Mechanical Piston",
-  "block.kinetics.piston_extension_pole": "Piston Extension Pole"
+  "block.kinetics.piston_extension_pole": "Piston Extension Pole",
+  "block.kinetics.mechanical_bearing": "Mechanical Bearing",
+  "block.kinetics.cart_assembler": "Cart Assembler"
 }

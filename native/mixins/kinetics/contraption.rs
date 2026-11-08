@@ -26,6 +26,12 @@ pub const POLE: &str = "kinetics:piston_extension_pole";
 pub const EXTENDED_KEY: &str = "Extended";
 /// Poles a piston counts (Create's `maxPoleLength`-ish; each pole is a block of reach).
 pub const MAX_POLES: i32 = 64;
+pub const BEARING: &str = "kinetics:mechanical_bearing";
+pub const ASSEMBLER: &str = "kinetics:cart_assembler";
+/// The bearing's block entity key: 1 while a structure turns on it.
+pub const RUNNING_KEY: &str = "Running";
+/// The assembler's: 1 while its signal was on at its last tick (it assembles when the signal comes on).
+pub const WAS_POWERED_KEY: &str = "WasPowered";
 pub const GLUE_ITEM: &str = "kinetics:super_glue";
 /// Blocks in one contraption. Create allows 2048; each block is an entity here, so start low for weak PCs.
 pub const LIMIT: usize = 256;
@@ -151,8 +157,142 @@ pub fn piston_speed(rpm: f32) -> f64 {
 }
 
 /// A moving drill works only facing the way it goes (Create's `VecHelper.isVecPointingTowards`).
-pub fn drills_toward(facing: Pos, motion: [f64; 3]) -> bool {
-    (0..3).map(|i| f64::from(facing[i]) * motion[i]).sum::<f64>() > 0.0
+pub fn drills_toward(facing: [f64; 3], motion: [f64; 3]) -> bool {
+    (0..3).map(|i| facing[i] * motion[i]).sum::<f64>() > 0.0
+}
+
+// ---- Bearing (BUR.md phase 6, Create's `MechanicalBearingBlockEntity`) ----
+
+/// Degrees a tick per RPM (`getAngularSpeed`: speed * 3 / 10), and the most a tick turns (a fast bearing would skip walls).
+pub const DEG_PER_RPM: f64 = 0.3;
+pub const MAX_DEG: f64 = 24.0;
+/// Degrees a tick a stopped bearing takes to settle on the nearest quarter turn.
+pub const SETTLE_DEG: f64 = 3.0;
+
+/// The angle after a tick (degrees, 0..360) and whether it is at rest on a quarter turn, where it can be put down:
+/// a bearing with speed turns on, one without goes to the nearest multiple of 90.
+pub fn spin_step(angle: f64, rpm: f32) -> (f64, bool) {
+    if rpm != 0.0 {
+        return ((angle + (f64::from(rpm) * DEG_PER_RPM).clamp(-MAX_DEG, MAX_DEG)).rem_euclid(360.0), false);
+    }
+    let goal = (angle / 90.0).round() * 90.0;
+    let d = goal - angle;
+    if d.abs() <= SETTLE_DEG {
+        (goal.rem_euclid(360.0), true)
+    } else {
+        (angle + SETTLE_DEG * d.signum(), false)
+    }
+}
+
+/// `v` turned by `deg` about the unit `axis` (right-handed, Rodrigues).
+pub fn rotate(v: [f64; 3], axis: Pos, deg: f64) -> [f64; 3] {
+    let (s, c) = deg.to_radians().sin_cos();
+    let k = axis.map(f64::from);
+    let dot: f64 = (0..3).map(|i| k[i] * v[i]).sum();
+    let cr = [k[1] * v[2] - k[2] * v[1], k[2] * v[0] - k[0] * v[2], k[0] * v[1] - k[1] * v[0]];
+    [0, 1, 2].map(|i| v[i] * c + cr[i] * s + k[i] * dot * (1.0 - c))
+}
+
+/// The same turn as a display's `left_rotation` (x, y, z, w).
+pub fn quaternion(axis: Pos, deg: f64) -> [f32; 4] {
+    let (s, c) = (deg.to_radians() / 2.0).sin_cos();
+    [axis[0] as f32 * s as f32, axis[1] as f32 * s as f32, axis[2] as f32 * s as f32, c as f32]
+}
+
+/// `v` turned by `quarters` quarter turns about `axis`, exactly.
+pub fn turn(v: Pos, axis: Pos, quarters: i32) -> Pos {
+    (0..quarters.rem_euclid(4)).fold(v, |v, _| {
+        let dot: i32 = (0..3).map(|i| axis[i] * v[i]).sum();
+        let cr = [axis[1] * v[2] - axis[2] * v[1], axis[2] * v[0] - axis[0] * v[2], axis[0] * v[1] - axis[1] * v[0]];
+        [0, 1, 2].map(|i| cr[i] + axis[i] * dot)
+    })
+}
+
+const NAMED: [(&str, Pos); 6] =
+    [("east", [1, 0, 0]), ("west", [-1, 0, 0]), ("up", [0, 1, 0]), ("down", [0, -1, 0]), ("south", [0, 0, 1]), ("north", [0, 0, -1])];
+
+/// A block state property after the block turns: `facing` and `axis` follow it, the rest stays.
+/// shortcut: only those two (not a stair's shape or a block entity's own direction); add them with the parts that need it.
+pub fn turn_property(key: &str, value: &str, axis: Pos, quarters: i32) -> Option<String> {
+    match key {
+        "facing" => {
+            let v = NAMED.iter().find(|n| n.0 == value)?.1;
+            let t = turn(v, axis, quarters);
+            Some(NAMED.iter().find(|n| n.1 == t)?.0.to_owned())
+        }
+        "axis" => {
+            let i = ["x", "y", "z"].iter().position(|a| *a == value)?;
+            let mut v = [0; 3];
+            v[i] = 1;
+            let t = turn(v, axis, quarters);
+            Some(["x", "y", "z"][(0..3).find(|&j| t[j] != 0)?].to_owned())
+        }
+        _ => None,
+    }
+}
+
+// ---- Cart (BUR.md phase 5, Create's minecart contraptions) ----
+
+/// A new cart's speed in blocks a tick, the fastest one (vanilla's), and the least that keeps it going.
+pub const CART_START: f64 = 0.1;
+pub const CART_MAX: f64 = 0.4;
+pub const CART_MIN: f64 = 0.01;
+/// South, east, north, west.
+const HEADINGS: [Pos; 4] = [[0, 0, 1], [1, 0, 0], [0, 0, -1], [-1, 0, 0]];
+
+pub fn is_rail(name: &str) -> bool {
+    matches!(name, "minecraft:rail" | "minecraft:powered_rail" | "minecraft:detector_rail" | "minecraft:activator_rail" | ASSEMBLER)
+}
+
+/// The two sides a rail shape joins and the one that climbs.
+fn rail_sides(shape: &str) -> Option<([Pos; 2], Option<Pos>)> {
+    let (n, s, e, w) = ([0, 0, -1], [0, 0, 1], [1, 0, 0], [-1, 0, 0]);
+    Some(match shape {
+        "north_south" => ([n, s], None),
+        "east_west" => ([w, e], None),
+        "ascending_east" => ([w, e], Some(e)),
+        "ascending_west" => ([w, e], Some(w)),
+        "ascending_north" => ([n, s], Some(n)),
+        "ascending_south" => ([n, s], Some(s)),
+        "south_east" => ([s, e], None),
+        "south_west" => ([s, w], None),
+        "north_west" => ([n, w], None),
+        "north_east" => ([n, e], None),
+        _ => return None,
+    })
+}
+
+/// Where a cart on the rail at `cell` (of `shape`) going `heading` goes next, and its heading there (`RailState`):
+/// it came in by the side behind it and goes out by the other, up a block if that side climbs, down one if the rail
+/// is not at the same height. None when the rail doesn't join where it came from or nothing continues it.
+pub fn cart_next(cell: Pos, shape: &str, heading: Pos, mut rail_at: impl FnMut(Pos) -> bool) -> Option<(Pos, Pos)> {
+    let (sides, climb) = rail_sides(shape)?;
+    let back = heading.map(|v| -v);
+    let out = if sides[0] == back {
+        sides[1]
+    } else if sides[1] == back {
+        sides[0]
+    } else {
+        return None;
+    };
+    let level = [cell[0] + out[0], cell[1] + out[1] + i32::from(climb == Some(out)), cell[2] + out[2]];
+    [level, [level[0], level[1] - 1, level[2]]].into_iter().find(|&p| rail_at(p)).map(|p| (p, out))
+}
+
+/// The way a cart set down on this rail goes: the first of south, east, north, west with a rail to go on.
+pub fn cart_start(cell: Pos, shape: &str, mut rail_at: impl FnMut(Pos) -> bool) -> Option<Pos> {
+    HEADINGS.into_iter().find(|&h| cart_next(cell, shape, h, &mut rail_at).is_some())
+}
+
+/// The speed after one rail: a powered rail adds (`Some(true)`) or stops it (`Some(false)`), the others take a little
+/// and a climb takes more (a descent gives); 0 once it is too slow to go on.
+pub fn cart_speed(speed: f64, powered_rail: Option<bool>, climb: i32) -> f64 {
+    let v = match powered_rail {
+        Some(true) => speed + 0.06,
+        Some(false) => 0.0,
+        None => speed - 0.005 - 0.025 * f64::from(climb),
+    };
+    if v < CART_MIN { 0.0 } else { v.min(CART_MAX) }
 }
 
 /// A moving drill's break speed (`BlockBreakingMovementBehaviour.getBlockBreakingSpeed` from
@@ -241,8 +381,13 @@ pub struct Request {
     pub speed: f64,
     pub extra: Option<Glue>,
     pub feedback: bool,
-    /// A piston and the `EXTENDED` value it gets once the request is taken (a refused one leaves it as it was).
-    pub owner: Option<(Pos, i32)>,
+    /// A piston or bearing, the key of its block entity and the value it gets once the request is taken (a refused
+    /// one leaves it as it was).
+    pub owner: Option<(Pos, &'static str, i32)>,
+    /// A bearing's request: the axis (its facing) the contraption turns about; `by` and `speed` are not used.
+    pub spin: Option<Pos>,
+    /// A cart's: the way it first goes; `by` is not used, `speed` is its first.
+    pub cart: Option<Pos>,
 }
 
 pub static REQUESTS: std::sync::Mutex<Vec<Request>> = std::sync::Mutex::new(Vec::new());
@@ -353,9 +498,9 @@ mod tests {
 
     #[test]
     fn moving_drills() {
-        assert!(drills_toward([1, 0, 0], [SPEED, 0.0, 0.0]));
-        assert!(!drills_toward([-1, 0, 0], [SPEED, 0.0, 0.0]));
-        assert!(!drills_toward([0, 1, 0], [SPEED, 0.0, 0.0]));
+        assert!(drills_toward([1.0, 0.0, 0.0], [SPEED, 0.0, 0.0]));
+        assert!(!drills_toward([-1.0, 0.0, 0.0], [SPEED, 0.0, 0.0]));
+        assert!(!drills_toward([0.0, 1.0, 0.0], [SPEED, 0.0, 0.0]));
         // 1/16 block a tick: Create's animation speed 100, break speed 0.2.
         assert_eq!(drill_rpm(SPEED), 20.0);
         assert_eq!(drill_rpm(0.0), 100.0 / 128.0);
@@ -366,6 +511,65 @@ mod tests {
         assert_eq!(piston_speed(16.0), 1.0 / 32.0);
         assert_eq!(piston_speed(-256.0), -0.49);
         assert_eq!(piston_speed(0.0), 0.0);
+    }
+
+    #[test]
+    fn spinning() {
+        // 16 RPM turns 4.8 degrees a tick; a stopped bearing settles on the nearest quarter and says so.
+        assert_eq!(spin_step(0.0, 16.0), (4.8, false));
+        assert_eq!(spin_step(358.0, 16.0).0, (358.0f64 + 4.8).rem_euclid(360.0));
+        assert_eq!(spin_step(10.0, -1000.0).0, 346.0);
+        assert_eq!(spin_step(40.0, 0.0), (37.0, false));
+        assert_eq!(spin_step(88.0, 0.0), (90.0, true));
+        assert_eq!(spin_step(359.0, 0.0), (0.0, true));
+        assert_eq!(spin_step(0.0, 0.0), (0.0, true));
+    }
+
+    #[test]
+    fn turns() {
+        // A quarter turn about +y: east goes to north (right-handed, y up).
+        assert_eq!(turn([1, 0, 0], [0, 1, 0], 1), [0, 0, -1]);
+        assert_eq!(turn([1, 2, 3], [0, 1, 0], 4), [1, 2, 3]);
+        assert_eq!(turn([1, 0, 0], [0, 1, 0], -1), [0, 0, 1]);
+        let f = rotate([1.0, 0.0, 0.0], [0, 1, 0], 90.0);
+        assert!(f[0].abs() < 1e-9 && (f[2] + 1.0).abs() < 1e-9);
+        assert_eq!(turn_property("facing", "east", [0, 1, 0], 1).as_deref(), Some("north"));
+        assert_eq!(turn_property("facing", "up", [0, 1, 0], 1).as_deref(), Some("up"));
+        assert_eq!(turn_property("axis", "x", [0, 1, 0], 1).as_deref(), Some("z"));
+        assert_eq!(turn_property("axis", "y", [0, 1, 0], 1).as_deref(), Some("y"));
+        assert_eq!(turn_property("powered", "true", [0, 1, 0], 1), None);
+        assert_eq!(quaternion([0, 1, 0], 180.0)[1], 1.0);
+    }
+
+    #[test]
+    fn carts() {
+        let rails = |cells: &'static [Pos]| move |p: Pos| cells.contains(&p);
+        // Straight on, and not back out of the way it came.
+        let line: &[Pos] = &[[0, 0, 1], [0, 0, -1]];
+        assert_eq!(cart_next([0, 0, 0], "north_south", [0, 0, 1], rails(line)), Some(([0, 0, 1], [0, 0, 1])));
+        assert_eq!(cart_next([0, 0, 0], "north_south", [1, 0, 0], rails(line)), None);
+        assert_eq!(cart_next([0, 0, 0], "north_south", [0, 0, 1], rails(&[])), None);
+        // A curve joining south and east: heading north (came from the south) goes out east.
+        assert_eq!(cart_next([0, 0, 0], "south_east", [0, 0, -1], rails(&[[1, 0, 0]])), Some(([1, 0, 0], [1, 0, 0])));
+        assert_eq!(cart_next([0, 0, 0], "south_east", [-1, 0, 0], rails(&[[0, 0, 1]])), Some(([0, 0, 1], [0, 0, 1])));
+        // Up a slope that rises to the east, and down it the other way.
+        assert_eq!(cart_next([0, 0, 0], "ascending_east", [1, 0, 0], rails(&[[1, 1, 0]])), Some(([1, 1, 0], [1, 0, 0])));
+        assert_eq!(cart_next([0, 0, 0], "ascending_east", [-1, 0, 0], rails(&[[-1, 0, 0]])), Some(([-1, 0, 0], [-1, 0, 0])));
+        // A flat rail running into the top of a slope down: the next rail is a block lower.
+        assert_eq!(cart_next([0, 0, 0], "east_west", [-1, 0, 0], rails(&[[-1, -1, 0]])), Some(([-1, -1, 0], [-1, 0, 0])));
+        assert_eq!(cart_start([0, 0, 0], "north_south", rails(&[[0, 0, -1]])), Some([0, 0, -1]));
+        assert_eq!(cart_start([0, 0, 0], "north_south", rails(&[])), None);
+        assert!(is_rail("minecraft:powered_rail") && is_rail(ASSEMBLER) && !is_rail("minecraft:stone"));
+    }
+
+    #[test]
+    fn cart_speeds() {
+        assert!((cart_speed(0.1, None, 0) - 0.095).abs() < 1e-12);
+        assert!((cart_speed(0.1, None, 1) - 0.07).abs() < 1e-12);
+        assert!((cart_speed(0.1, None, -1) - 0.12).abs() < 1e-12);
+        assert_eq!(cart_speed(0.38, Some(true), 0), CART_MAX);
+        assert_eq!(cart_speed(0.3, Some(false), 0), 0.0);
+        assert_eq!(cart_speed(0.02, None, 1), 0.0);
     }
 
     #[test]

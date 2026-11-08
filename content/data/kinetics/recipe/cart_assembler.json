@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "C": "kinetics:andesite_casing",
+    "R": "minecraft:rail"
+  },
+  "pattern": [
+    "C",
+    "R"
+  ],
+  "result": {
+    "id": "kinetics:cart_assembler",
+    "count": 1
+  }
+}

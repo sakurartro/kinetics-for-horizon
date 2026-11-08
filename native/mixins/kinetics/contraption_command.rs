@@ -35,5 +35,7 @@ fn kinetics_contraption_command(
         extra: Some(c::Glue::new(from, to)),
         feedback: true,
         owner: None,
+        spin: None,
+        cart: None,
     });
 }

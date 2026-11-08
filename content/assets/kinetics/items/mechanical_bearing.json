@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "kinetics:block/mechanical_bearing"
+  }
+}

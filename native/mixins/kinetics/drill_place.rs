@@ -6,7 +6,7 @@ fn kinetics_drill_place(
     answer: &mut Option<Option<BlockStateId>>,
 ) {
     use crate::game::{kinetics as k, kinetics_drill as d, kinetics_motor as m};
-    if !matches!(level.native_state_block(state), Some(d::BLOCK | crate::game::kinetics_contraption::PISTON)) {
+    if !matches!(level.native_state_block(state), Some(d::BLOCK | crate::game::kinetics_contraption::PISTON | crate::game::kinetics_contraption::BEARING)) {
         return;
     }
     // A neighbour has a shaft toward the drill when it turns on the axis that joins them (as for the motor).

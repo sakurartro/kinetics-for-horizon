@@ -41,9 +41,10 @@ pub const KEYS: [&str; 4] = [CAPACITY_KEY, STRESS_KEY, SIZE_KEY, THEORETICAL_KEY
 /// `BlockStressValues` defaults: (block, impact, capacity), in su at 1 RPM. Create's values for the blocks it has
 /// (`AllBlocks.java`: shafts, cogwheels, gearbox, clutch, gearshift, chain drives, the casings' variants and the
 /// speed controller are all `setNoImpact`, so 0 and not listed); blocks not listed have none.
-const VALUES: [(&str, f32, f32); 5] = [
+const VALUES: [(&str, f32, f32); 6] = [
     ("mechanical_drill", 4.0, 0.0),
     ("mechanical_piston", 4.0, 0.0),
+    ("mechanical_bearing", 4.0, 0.0),
     ("creative_motor", 0.0, 16384.0),
     ("hand_crank", 0.0, 8.0),
     // Not Create's: the engines are not ported; the powered shaft takes the steam engine's capacity.

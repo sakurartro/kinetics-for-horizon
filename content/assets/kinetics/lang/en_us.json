@@ -43,5 +43,8 @@
   "block.kinetics.mechanical_piston": "Mechanical Piston",
   "block.kinetics.piston_extension_pole": "Piston Extension Pole",
   "block.kinetics.mechanical_bearing": "Mechanical Bearing",
-  "block.kinetics.cart_assembler": "Cart Assembler"
+  "block.kinetics.cart_assembler": "Cart Assembler",
+  "item.kinetics.minecart_contraption": "Minecart Contraption",
+  "item.kinetics.furnace_minecart_contraption": "Furnace Minecart Contraption",
+  "item.kinetics.chest_minecart_contraption": "Chest Minecart Contraption"
 }

@@ -322,6 +322,29 @@ pub fn cart_quarters(initial: f64, yaw: f64) -> i32 {
     ((initial - yaw) / 90.0).round() as i32
 }
 
+/// Create's `MinecartContraptionItem`s: the cart a contraption rides and the item the wrench makes of the two.
+pub const CART_ITEMS: [(&str, &str); 3] = [
+    ("minecraft:minecart", "kinetics:minecart_contraption"),
+    ("minecraft:furnace_minecart", "kinetics:furnace_minecart_contraption"),
+    ("minecraft:chest_minecart", "kinetics:chest_minecart_contraption"),
+];
+
+/// The item a contraption on `cart` (its item id) is picked up as.
+pub fn contraption_item(cart: &str) -> Option<&'static str> {
+    CART_ITEMS.iter().find(|c| c.0 == cart).map(|c| c.1)
+}
+
+/// The cart (its item id) a contraption item is placed with.
+pub fn contraption_cart(item: &str) -> Option<&'static str> {
+    CART_ITEMS.iter().find(|c| c.1 == item).map(|c| c.0)
+}
+
+/// The yaw a placed cart contraption starts at (`createAtYaw(player.getDirection().toYRot())`): the player's yaw
+/// snapped to south 0, west 90, north 180, east 270 (`Direction.fromYRot`).
+pub fn facing_yaw(player_yaw: f32) -> f64 {
+    f64::from(((f64::from(player_yaw) / 90.0 + 0.5).floor() as i32 & 3) * 90)
+}
+
 /// A moving drill's break speed (`BlockBreakingMovementBehaviour.getBlockBreakingSpeed` from
 /// `MovementContext.getAnimationSpeed`), as the RPM `kinetics_drill::step` takes (it breaks at RPM / 100).
 pub fn drill_rpm(blocks_per_tick: f64) -> f32 {
@@ -615,6 +638,18 @@ mod tests {
         assert_eq!(turn([1, 0, 0], [0, 1, 0], cart_quarters(90.0, 270.0)), [-1, 0, 0]);
         assert_eq!(cart_quarters(90.0, 0.0), 1);
         assert_eq!(cart_anchor([10.3, 64.0625, -3.5]), [10, 64, -4]);
+    }
+
+    #[test]
+    fn cart_items() {
+        assert_eq!(contraption_item("minecraft:chest_minecart"), Some("kinetics:chest_minecart_contraption"));
+        assert_eq!(contraption_cart("kinetics:minecart_contraption"), Some("minecraft:minecart"));
+        assert_eq!(contraption_item("minecraft:tnt_minecart"), None);
+        assert_eq!(facing_yaw(0.0), 0.0);
+        assert_eq!(facing_yaw(-90.0), 270.0);
+        assert_eq!(facing_yaw(134.0), 90.0);
+        assert_eq!(facing_yaw(136.0), 180.0);
+        assert_eq!(facing_yaw(-200.0), 180.0);
     }
 
     #[test]

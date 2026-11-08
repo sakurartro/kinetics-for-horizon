@@ -39,7 +39,7 @@ fn kinetics_cart_pickup(game: &mut crate::game::Game<'_>, target: Option<Interac
     if let Tag::Compound(d) = &mut data {
         d.remove(&JavaString::from("cart"));
         d.remove(&JavaString::from("stall"));
-        if let Some(Tag::List(pieces)) = d.get_mut("pieces") {
+        if let Some(Tag::List(pieces)) = d.get_mut(&JavaString::from("pieces")) {
             for p in pieces {
                 if let Tag::Compound(p) = p {
                     p.remove(&JavaString::from("breaker"));

@@ -49,7 +49,7 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
     mine.retain(|l| markers.contains(&l.marker));
     for &m in &markers {
         if !mine.iter().any(|l| l.marker == m) {
-            mine.push(c::Live { dimension: dimension.to_owned(), marker: m, displays: Vec::new() });
+            mine.push(c::Live { dimension: dimension.to_owned(), marker: m, displays: Vec::new(), cart: None, lost: 0 });
         }
     }
     for id in &pieces {
@@ -149,8 +149,11 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
                 data.insert("bearing".into(), Tag::IntArray(p.to_vec()));
             }
         }
-        if let Some(h) = r.cart {
-            data.insert("heading".into(), Tag::IntArray(h.to_vec()));
+        if let Some((cart, yaw)) = r.cart {
+            // A cart's: the cart it rides, and its first yaw, which it turns from.
+            data.insert("cart".into(), Tag::Int(cart as i32));
+            data.insert("initial".into(), Tag::Double(yaw.to_bits()));
+            data.insert("yaw".into(), Tag::Double(yaw.to_bits()));
         }
         data.insert("pieces".into(), Tag::List(pieces));
         data.insert(
@@ -246,14 +249,13 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
                 }
             }
         }
+        if data.get("cart").is_some() {
+            return c_ride(game, dimension, l, &data, origin, list);
+        }
         if let Some(axis) = ints("axis") {
             return c_spin(game, dimension, l, &data, origin, axis, list);
         }
         if offset == target {
-            // A cart that got to a rail goes on to the next, else it is put down where it is.
-            if data.get("heading").is_some() && c_cart(game, l.marker, origin, offset, &data) {
-                return true;
-            }
             return c_place(game, dimension, l, origin, offset, list, &data, None);
         }
         let speed = match data.get("speed") {
@@ -309,41 +311,136 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
         c::InWay { solid: f.legacy_solid, breakable: d::breakable(&f.name, f.hardness, f.has_class("LiquidBlock")) }
     }
 
-    /// A cart got to the rail under its anchor (BUR.md phase 5): work out the next rail and write the next leg (`target`,
-    /// `heading`, `speed`) into the marker. False to stop: no rail goes on, it is too slow, a powered rail is off, or it
-    /// is on an assembler with no signal (Create: that one takes the cart apart).
-    fn c_cart(game: &mut crate::game::Game<'_>, marker: u32, origin: [i32; 3], offset: [f64; 3], data: &horizon_world::nbt::Tag) -> bool {
+    /// A cart's contraption (BUR.md phase 5, Create's `OrientedContraptionEntity` riding a minecart): it sits on its
+    /// cart, the assembler's block under it, and turns to face the way the cart goes; its drills hold the cart still
+    /// while they break what they ran into (anything else goes through, as in Create). On an assembler with no
+    /// signal it is put down facing that assembler's arrow, and where it is once its cart is gone: false.
+    fn c_ride(
+        game: &mut crate::game::Game<'_>,
+        dimension: &str,
+        l: &mut crate::game::kinetics_contraption::Live,
+        data: &horizon_world::nbt::Tag,
+        origin: [i32; 3],
+        list: &[horizon_world::nbt::Tag],
+    ) -> bool {
         use crate::game::kinetics_contraption as c;
-        use horizon_world::nbt::Tag;
-        let heading = match data.get("heading") {
-            Some(Tag::IntArray(v)) if v.len() == 3 => [v[0], v[1], v[2]],
-            _ => return false,
-        };
-        let speed = match data.get("speed") {
+        use crate::game::native_entities::NativeDisplay;
+        use horizon_core::geometry::Vec3;
+        use horizon_world::nbt::{JavaString, Tag};
+        const UP: [i32; 3] = [0, 1, 0];
+        let num = |key: &str| match data.get(key) {
             Some(Tag::Double(b)) => f64::from_bits(*b),
             _ => 0.0,
         };
-        let at = c::landing(origin, offset, [0, -1, 0]);
-        let name = game.res.facts().get(game.world.block(at[0], at[1], at[2])).name.to_string();
-        let powered = game.native_block_property(at, "powered").as_deref() == Some("true");
-        if name == c::ASSEMBLER && !powered {
-            return false;
-        }
-        let shape = game.native_block_property(at, "shape").unwrap_or_default();
-        let Some((next, new_heading)) = c::cart_next(at, &shape, heading, |p| {
-            c::is_rail(&game.res.facts().get(game.world.block(p[0], p[1], p[2])).name)
-        }) else {
-            return false;
+        let (initial, yaw) = (num("initial"), num("yaw"));
+        let rel = |p: &Tag| match p.get("pos") {
+            Some(Tag::IntArray(v)) if v.len() == 3 => [v[0], v[1], v[2]],
+            _ => [0; 3],
         };
-        let speed = c::cart_speed(speed, (name == "minecraft:powered_rail").then_some(powered), next[1] - at[1]);
-        if speed == 0.0 {
-            return false;
+        // c_place lands the blocks from the anchor block (the assembler's place); the snapshot starts a block above it.
+        let from = |anchor: [i32; 3]| [0, 1, 2].map(|k| f64::from(anchor[k] + i32::from(k == 1) - origin[k]));
+        let marker = game.others.iter().find(|o| o.id == l.marker).map(|o| [o.position.x, o.position.y, o.position.z]);
+        let dist = |a: [f64; 3], b: Vec3| (a[0] - b.x).powi(2) + (a[1] - b.y).powi(2) + (a[2] - b.z).powi(2);
+        let wanted = l.cart.or(match data.get("cart") {
+            Some(Tag::Int(id)) => Some(*id as u32),
+            _ => None,
+        });
+        let mut cart = wanted.and_then(|id| game.carts.iter().position(|k| k.id == id));
+        // After a reload ids are new: the cart is the one under the marker, which moves with it.
+        if let Some(m) = marker {
+            if cart.is_none_or(|i| dist(m, game.carts[i].position) > 4.0) {
+                cart = (0..game.carts.len())
+                    .filter(|&i| dist(m, game.carts[i].position) <= 4.0)
+                    .min_by(|&a, &b| dist(m, game.carts[a].position).total_cmp(&dist(m, game.carts[b].position)));
+            }
         }
-        if let Some(Tag::Compound(d)) = game.persist.raw.get_mut(&marker).and_then(|t| t.get_mut("data")) {
-            let goal = [0, 1, 2].map(|i| offset[i] + f64::from(next[i] - at[i]));
-            d.insert("target".into(), Tag::List(goal.iter().map(|x| Tag::Double(x.to_bits())).collect()));
-            d.insert("heading".into(), Tag::IntArray(new_heading.to_vec()));
-            d.insert("speed".into(), Tag::Double(speed.to_bits()));
+        let Some(i) = cart else {
+            // shortcut: a missing cart (broken, or its chunk not back yet) is waited for 10 ticks before the blocks
+            // are put down; Create's contraption is saved inside its cart, so it never waits. Upgrade if one is
+            // put down by mistake next to a cart that loads late.
+            l.lost += 1;
+            return match marker {
+                Some(m) if l.lost >= 10 => {
+                    let at = c::cart_anchor(m);
+                    c_place(game, dimension, l, origin, from(at), list, data, Some((UP, c::cart_quarters(initial, yaw))))
+                }
+                _ => true,
+            };
+        };
+        l.lost = 0;
+        l.cart = Some(game.carts[i].id);
+        let (p, v) = (game.carts[i].position, game.carts[i].velocity);
+        let (pos, vel) = ([p.x, p.y, p.z], [v.x, v.y, v.z]);
+        // On an assembler with no signal (`disassemble`: its yaw becomes the assembler's arrow).
+        let under = pos.map(|x| x.floor() as i32);
+        if &*game.res.facts().get(game.world.block(under[0], under[1], under[2])).name == c::ASSEMBLER
+            && game.native_block_property(under, "powered").as_deref() != Some("true")
+        {
+            let shape = game.native_block_property(under, "shape").unwrap_or_default();
+            let front = c::assembler_yaw(&shape, game.native_block_property(under, "backwards").as_deref() == Some("true"));
+            let at = c::cart_anchor(pos);
+            return c_place(game, dimension, l, origin, from(at), list, data, Some((UP, c::cart_quarters(initial, front))));
+        }
+        // Stalled, it keeps the motion the cart had (`motionBeforeStall`) and doesn't turn.
+        let stall = match data.get("stall") {
+            Some(Tag::List(s)) if s.len() == 3 => Some([0, 1, 2].map(|k| if let Tag::Double(b) = &s[k] { f64::from_bits(*b) } else { 0.0 })),
+            _ => None,
+        };
+        let motion = stall.unwrap_or(vel);
+        let size = 2.0 * list.iter().map(|q| { let r = rel(q); f64::from(r[0]).hypot(f64::from(r[2])) }).fold(0.0, f64::max) + 1.0;
+        let yaw = if stall.is_some() { yaw } else { c::cart_yaw(yaw, vel, size) };
+        let turn = initial - yaw;
+        // A block's centre: the anchor block's centre is half a block over the cart, the snapshot a block above that.
+        let centre = |r: [i32; 3]| {
+            let w = c::rotate(r.map(f64::from), UP, turn);
+            [pos[0] + w[0], pos[1] + 1.5 + w[1], pos[2] + w[2]]
+        };
+        // Each drill facing the motion whose centre is in a block it can break (`visitNewPosition`): it stalls.
+        let speed = (motion[0] * motion[0] + motion[1] * motion[1] + motion[2] * motion[2]).sqrt();
+        let mut drilling = Vec::new();
+        if speed >= 1.0 / 512.0 {
+            for (k, q) in list.iter().enumerate() {
+                let Some(f) = c_facing(q) else { continue };
+                if !c::drills_toward(c::rotate(f.map(f64::from), UP, turn), motion) {
+                    continue;
+                }
+                let cell = centre(rel(q)).map(|x| x.floor() as i32);
+                if c_in_way(game, cell).breakable {
+                    drilling.push((k, cell));
+                }
+            }
+        }
+        if !drilling.is_empty() {
+            game.carts[i].velocity = Vec3::ZERO;
+        } else if let Some(s) = stall {
+            game.carts[i].velocity = Vec3::new(s[0], s[1], s[2]);
+        }
+        for &(k, cell) in &drilling {
+            c_drill(game, l.marker, k, &list[k], cell, c::drill_rpm(speed));
+        }
+        let shown = NativeDisplay {
+            translation: c::rotate([-0.5; 3], UP, turn).map(|x| x as f32),
+            left_rotation: c::quaternion(UP, turn),
+            interpolation: 1,
+            teleport: 1,
+            ..Default::default()
+        };
+        for (id, q) in l.displays.iter().zip(list) {
+            game.native_move_entity(dimension, *id, centre(rel(q)), 0.0, 0.0);
+            game.native_set_display(dimension, *id, &shown);
+        }
+        game.native_move_entity(dimension, l.marker, pos, 0.0, 0.0);
+        if let Some(Tag::Compound(d)) = game.persist.raw.get_mut(&l.marker).and_then(|t| t.get_mut("data")) {
+            d.insert("yaw".into(), Tag::Double(yaw.to_bits()));
+            match (drilling.is_empty(), stall) {
+                (false, None) => {
+                    d.insert("stall".into(), Tag::List(vel.iter().map(|x| Tag::Double(x.to_bits())).collect()));
+                }
+                (true, Some(_)) => {
+                    d.remove(&JavaString::from("stall"));
+                }
+                _ => {}
+            }
         }
         true
     }

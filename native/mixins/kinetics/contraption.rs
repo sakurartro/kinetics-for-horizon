@@ -30,8 +30,6 @@ pub const BEARING: &str = "kinetics:mechanical_bearing";
 pub const ASSEMBLER: &str = "kinetics:cart_assembler";
 /// The bearing's block entity key: 1 while a structure turns on it.
 pub const RUNNING_KEY: &str = "Running";
-/// The assembler's: 1 while its signal was on at its last tick (it assembles when the signal comes on).
-pub const WAS_POWERED_KEY: &str = "WasPowered";
 pub const GLUE_ITEM: &str = "kinetics:super_glue";
 /// Blocks in one contraption. Create allows 2048; each block is an entity here, so start low for weak PCs.
 pub const LIMIT: usize = 256;
@@ -244,68 +242,84 @@ pub fn turn_property(key: &str, value: &str, axis: Pos, quarters: i32) -> Option
     }
 }
 
-// ---- Cart (BUR.md phase 5, Create's minecart contraptions) ----
+// ---- Cart (BUR.md phase 5, Create's `CartAssemblerBlock(Entity)` and `OrientedContraptionEntity` on a minecart) ----
+// Yaws are Create's (`Direction.toYRot`): south 0, west 90, north 180, east 270. A contraption on a cart is turned
+// by `initial - yaw` degrees about +y (`rotate`, `turn`: counterclockwise from above), as Create draws it.
 
-/// A new cart's speed in blocks a tick, the fastest one (vanilla's), and the least that keeps it going.
-pub const CART_START: f64 = 0.1;
+/// Ticks an assembler waits between two goes at a cart on it (`assemblyCooldown`).
+pub const ASSEMBLER_COOLDOWN: i32 = 8;
+/// The assembler's block entity key: ticks since it last acted on a cart.
+pub const SINCE_KEY: &str = "Since";
+/// `getRailMaxSpeed`: a powered assembler sends a moving cart off at this, in blocks a tick.
 pub const CART_MAX: f64 = 0.4;
-pub const CART_MIN: f64 = 0.01;
-/// South, east, north, west.
-const HEADINGS: [Pos; 4] = [[0, 0, 1], [1, 0, 0], [0, 0, -1], [-1, 0, 0]];
 
-pub fn is_rail(name: &str) -> bool {
-    matches!(name, "minecraft:rail" | "minecraft:powered_rail" | "minecraft:detector_rail" | "minecraft:activator_rail" | ASSEMBLER)
+/// `CartAssemblerBlock.getHorizontalDirection`, the arrow: the front of what it assembles. West on an east-west
+/// assembler, north on a north-south one, the other way round `backwards`.
+pub fn assembler_yaw(shape: &str, backwards: bool) -> f64 {
+    let base = if shape == "north_south" { 180.0 } else { 90.0 };
+    if backwards { (base + 180.0) % 360.0 } else { base }
 }
 
-/// The two sides a rail shape joins and the one that climbs.
-fn rail_sides(shape: &str) -> Option<([Pos; 2], Option<Pos>)> {
-    let (n, s, e, w) = ([0, 0, -1], [0, 0, 1], [1, 0, 0], [-1, 0, 0]);
-    Some(match shape {
-        "north_south" => ([n, s], None),
-        "east_west" => ([w, e], None),
-        "ascending_east" => ([w, e], Some(e)),
-        "ascending_west" => ([w, e], Some(w)),
-        "ascending_north" => ([n, s], Some(n)),
-        "ascending_south" => ([n, s], Some(s)),
-        "south_east" => ([s, e], None),
-        "south_west" => ([s, w], None),
-        "north_west" => ([n, w], None),
-        "north_east" => ([n, e], None),
-        _ => return None,
-    })
+/// The wrench turns the arrow a quarter clockwise (`onWrenched`): west, north, east, south. The new (shape, backwards).
+pub fn assembler_turned(shape: &str, backwards: bool) -> (&'static str, bool) {
+    match (shape == "north_south", backwards) {
+        (false, false) => ("north_south", false),
+        (true, false) => ("east_west", true),
+        (false, true) => ("north_south", true),
+        (true, true) => ("east_west", false),
+    }
 }
 
-/// Where a cart on the rail at `cell` (of `shape`) going `heading` goes next, and its heading there (`RailState`):
-/// it came in by the side behind it and goes out by the other, up a block if that side climbs, down one if the rail
-/// is not at the same height. None when the rail doesn't join where it came from or nothing continues it.
-pub fn cart_next(cell: Pos, shape: &str, heading: Pos, mut rail_at: impl FnMut(Pos) -> bool) -> Option<(Pos, Pos)> {
-    let (sides, climb) = rail_sides(shape)?;
-    let back = heading.map(|v| -v);
-    let out = if sides[0] == back {
-        sides[1]
-    } else if sides[1] == back {
-        sides[0]
-    } else {
+/// `yawFromVector`: the yaw a motion points along.
+pub fn yaw_of(v: [f64; 3]) -> f64 {
+    (270.0 + v[2].atan2(v[0]).to_degrees()).rem_euclid(360.0)
+}
+
+/// `OrientedContraptionEntity.updateOrientation`, ROTATE mode: the yaw turns toward the cart's motion by at most 12
+/// degrees a tick (less for a contraption wider than 6 blocks, `size`), and takes it once within a degree.
+pub fn cart_yaw(yaw: f64, motion: [f64; 3], size: f64) -> f64 {
+    if motion[0].hypot(motion[2]) < 1e-9 {
+        return yaw;
+    }
+    let target = yaw_of(motion);
+    let max = 12.0 / (size / 6.0).max(1.0);
+    let diff = |from: f64| (target - from + 540.0).rem_euclid(360.0) - 180.0;
+    let next = yaw + diff(yaw).clamp(-max, max);
+    if diff(next).abs() < 1.0 { target } else { next.rem_euclid(360.0) }
+}
+
+/// ASSEMBLE_ACCELERATE: a powered assembler sends a cart moving on it off at full speed the way it goes along the
+/// rail, or away from a solid block at an end of it (`conductor`: the block on the rail's negative side, positive
+/// side). None for a cart that is (nearly) still.
+pub fn assembler_push(x_axis: bool, v: [f64; 3], conductor: [bool; 2]) -> Option<[f64; 3]> {
+    if (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt() <= 1.0 / 128.0 {
         return None;
-    };
-    let level = [cell[0] + out[0], cell[1] + out[1] + i32::from(climb == Some(out)), cell[2] + out[2]];
-    [level, [level[0], level[1] - 1, level[2]]].into_iter().find(|&p| rail_at(p)).map(|p| (p, out))
+    }
+    let i = if x_axis { 0 } else { 2 };
+    let mut sign = if v[i] < 0.0 { -1.0 } else { 1.0 };
+    for (side, solid) in [(-1.0, conductor[0]), (1.0, conductor[1])] {
+        if solid {
+            sign = -side;
+        }
+    }
+    let mut out = [0.0; 3];
+    out[i] = sign * CART_MAX;
+    Some(out)
 }
 
-/// The way a cart set down on this rail goes: the first of south, east, north, west with a rail to go on.
-pub fn cart_start(cell: Pos, shape: &str, mut rail_at: impl FnMut(Pos) -> bool) -> Option<Pos> {
-    HEADINGS.into_iter().find(|&h| cart_next(cell, shape, h, &mut rail_at).is_some())
+/// DISASSEMBLE_BRAKE: an assembler with no signal pulls a cart toward its middle.
+pub fn assembler_brake(pos: Pos, cart: [f64; 3]) -> [f64; 3] {
+    [(f64::from(pos[0]) + 0.5 - cart[0]) / 16.0, 0.0, (f64::from(pos[2]) + 0.5 - cart[2]) / 16.0]
 }
 
-/// The speed after one rail: a powered rail adds (`Some(true)`) or stops it (`Some(false)`), the others take a little
-/// and a climb takes more (a descent gives); 0 once it is too slow to go on.
-pub fn cart_speed(speed: f64, powered_rail: Option<bool>, climb: i32) -> f64 {
-    let v = match powered_rail {
-        Some(true) => speed + 0.06,
-        Some(false) => 0.0,
-        None => speed - 0.005 - 0.025 * f64::from(climb),
-    };
-    if v < CART_MIN { 0.0 } else { v.min(CART_MAX) }
+/// The block a cart's contraption is put down from (`makeStructureTransform`): the cart's own, the assembler's place.
+pub fn cart_anchor(cart: [f64; 3]) -> Pos {
+    [cart[0].floor() as i32, (cart[1] + 0.5).floor() as i32, cart[2].floor() as i32]
+}
+
+/// The quarter turns a cart's contraption is put down with: its yaw from its first, to the nearest quarter.
+pub fn cart_quarters(initial: f64, yaw: f64) -> i32 {
+    ((initial - yaw) / 90.0).round() as i32
 }
 
 /// A moving drill's break speed (`BlockBreakingMovementBehaviour.getBlockBreakingSpeed` from
@@ -378,6 +392,9 @@ pub struct Live {
     pub dimension: String,
     pub marker: u32,
     pub displays: Vec<u32>,
+    /// A cart contraption's cart, once found, and the ticks it has been missing.
+    pub cart: Option<u32>,
+    pub lost: u32,
 }
 
 pub static LIVE: std::sync::Mutex<Vec<Live>> = std::sync::Mutex::new(Vec::new());
@@ -399,8 +416,8 @@ pub struct Request {
     pub owner: Option<(Pos, &'static str, i32)>,
     /// A bearing's request: the axis (its facing) the contraption turns about; `by` and `speed` are not used.
     pub spin: Option<Pos>,
-    /// A cart's: the way it first goes; `by` is not used, `speed` is its first.
-    pub cart: Option<Pos>,
+    /// A cart assembler's: the cart it rides and its first yaw (the assembler's arrow); `by` and `speed` are not used.
+    pub cart: Option<(u32, f64)>,
 }
 
 pub static REQUESTS: std::sync::Mutex<Vec<Request>> = std::sync::Mutex::new(Vec::new());
@@ -563,34 +580,41 @@ mod tests {
     }
 
     #[test]
-    fn carts() {
-        let rails = |cells: &'static [Pos]| move |p: Pos| cells.contains(&p);
-        // Straight on, and not back out of the way it came.
-        let line: &[Pos] = &[[0, 0, 1], [0, 0, -1]];
-        assert_eq!(cart_next([0, 0, 0], "north_south", [0, 0, 1], rails(line)), Some(([0, 0, 1], [0, 0, 1])));
-        assert_eq!(cart_next([0, 0, 0], "north_south", [1, 0, 0], rails(line)), None);
-        assert_eq!(cart_next([0, 0, 0], "north_south", [0, 0, 1], rails(&[])), None);
-        // A curve joining south and east: heading north (came from the south) goes out east.
-        assert_eq!(cart_next([0, 0, 0], "south_east", [0, 0, -1], rails(&[[1, 0, 0]])), Some(([1, 0, 0], [1, 0, 0])));
-        assert_eq!(cart_next([0, 0, 0], "south_east", [-1, 0, 0], rails(&[[0, 0, 1]])), Some(([0, 0, 1], [0, 0, 1])));
-        // Up a slope that rises to the east, and down it the other way.
-        assert_eq!(cart_next([0, 0, 0], "ascending_east", [1, 0, 0], rails(&[[1, 1, 0]])), Some(([1, 1, 0], [1, 0, 0])));
-        assert_eq!(cart_next([0, 0, 0], "ascending_east", [-1, 0, 0], rails(&[[-1, 0, 0]])), Some(([-1, 0, 0], [-1, 0, 0])));
-        // A flat rail running into the top of a slope down: the next rail is a block lower.
-        assert_eq!(cart_next([0, 0, 0], "east_west", [-1, 0, 0], rails(&[[-1, -1, 0]])), Some(([-1, -1, 0], [-1, 0, 0])));
-        assert_eq!(cart_start([0, 0, 0], "north_south", rails(&[[0, 0, -1]])), Some([0, 0, -1]));
-        assert_eq!(cart_start([0, 0, 0], "north_south", rails(&[])), None);
-        assert!(is_rail("minecraft:powered_rail") && is_rail(ASSEMBLER) && !is_rail("minecraft:stone"));
+    fn assemblers() {
+        // The arrow: west, and a wrench click at a time north, east, south, west.
+        assert_eq!(assembler_yaw("east_west", false), 90.0);
+        assert_eq!(assembler_yaw("north_south", true), 0.0);
+        let mut a = ("east_west", false);
+        let mut seen = Vec::new();
+        for _ in 0..4 {
+            a = assembler_turned(a.0, a.1);
+            seen.push(assembler_yaw(a.0, a.1));
+        }
+        assert_eq!(seen, [180.0, 270.0, 0.0, 90.0]);
+        // A powered one sends a moving cart on at full speed, away from a wall; a still one is left alone.
+        assert_eq!(assembler_push(true, [0.1, 0.0, 0.0], [false, false]), Some([CART_MAX, 0.0, 0.0]));
+        assert_eq!(assembler_push(false, [0.0, 0.0, -0.1], [false, false]), Some([0.0, 0.0, -CART_MAX]));
+        assert_eq!(assembler_push(true, [0.1, 0.0, 0.0], [false, true]), Some([-CART_MAX, 0.0, 0.0]));
+        assert_eq!(assembler_push(true, [0.001, 0.0, 0.0], [true, false]), None);
+        assert_eq!(assembler_brake([0, 0, 0], [0.9, 0.0625, 0.5]), [-0.025, 0.0, 0.0]);
     }
 
     #[test]
-    fn cart_speeds() {
-        assert!((cart_speed(0.1, None, 0) - 0.095).abs() < 1e-12);
-        assert!((cart_speed(0.1, None, 1) - 0.07).abs() < 1e-12);
-        assert!((cart_speed(0.1, None, -1) - 0.12).abs() < 1e-12);
-        assert_eq!(cart_speed(0.38, Some(true), 0), CART_MAX);
-        assert_eq!(cart_speed(0.3, Some(false), 0), 0.0);
-        assert_eq!(cart_speed(0.02, None, 1), 0.0);
+    fn cart_contraptions() {
+        assert_eq!(yaw_of([1.0, 0.0, 0.0]), 270.0);
+        assert_eq!(yaw_of([0.0, 0.0, 1.0]), 0.0);
+        assert_eq!(yaw_of([-1.0, 0.0, 0.0]), 90.0);
+        // Facing west, going east: it swings round 12 degrees a tick (6 for one 12 blocks wide), and lands on it.
+        assert_eq!(cart_yaw(90.0, [0.4, 0.0, 0.0], 3.0), 78.0);
+        assert_eq!(cart_yaw(90.0, [0.0, 0.0, -0.4], 12.0), 96.0);
+        assert_eq!(cart_yaw(265.0, [0.4, 0.0, 0.0], 3.0), 270.0);
+        assert_eq!(cart_yaw(5.0, [0.0, 0.0, 0.0], 3.0), 5.0);
+        // Turned round, a drill facing east faces west (drawn and put down alike).
+        let f = rotate([1.0, 0.0, 0.0], [0, 1, 0], 90.0 - 270.0);
+        assert!((f[0] + 1.0).abs() < 1e-9 && f[2].abs() < 1e-9);
+        assert_eq!(turn([1, 0, 0], [0, 1, 0], cart_quarters(90.0, 270.0)), [-1, 0, 0]);
+        assert_eq!(cart_quarters(90.0, 0.0), 1);
+        assert_eq!(cart_anchor([10.3, 64.0625, -3.5]), [10, 64, -4]);
     }
 
     #[test]

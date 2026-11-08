@@ -1174,7 +1174,7 @@ bindings = [
   { name = "entity", ty = "&mut ModBlockEntity", value = "&mut *entity" },
 ]
 
-# Every tick of a cart assembler: when its signal comes on it sets what is glued above it going on the rails.
+# Every tick of a cart assembler: a minecart on it gets what is glued above it (powered) or is braked (not).
 [[injection]]
 id = "assembler-tick"
 kind = "HEAD"
@@ -1184,4 +1184,30 @@ bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
   { name = "pos", ty = "[i32; 3]", value = "pos" },
   { name = "entity", ty = "&mut ModBlockEntity", value = "&mut *entity" },
+]
+
+# Minecarts ride a cart assembler as a rail (the game's carts know vanilla's rails by name).
+[[injection]]
+id = "cart-rail"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::minecarts::Game<'_>::rail"
+helper = "cart_rail.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "x", ty = "i32", value = "x" },
+  { name = "y", ty = "i32", value = "y" },
+  { name = "z", ty = "i32", value = "z" },
+]
+
+# A cart a contraption rides is ridden.
+[[injection]]
+id = "cart-vehicle"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::minecarts::Game<'_>::cart_is_vehicle"
+helper = "cart_vehicle.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "id", ty = "u32", value = "id" },
 ]

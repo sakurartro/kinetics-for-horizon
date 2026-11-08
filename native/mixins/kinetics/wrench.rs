@@ -20,6 +20,18 @@ fn kinetics_wrench(
     if block == crate::game::kinetics_water_wheel::LARGE && !sneaking {
         return;
     }
+    // A cart assembler's arrow turns a quarter clockwise (Create's `CartAssemblerBlock.onWrenched`).
+    if block == crate::game::kinetics_contraption::ASSEMBLER && !sneaking {
+        let shape = game.native_block_property(pos, "shape").unwrap_or_default();
+        if shape == "east_west" || shape == "north_south" {
+            let backwards = game.native_block_property(pos, "backwards").as_deref() == Some("true");
+            let (s, b) = crate::game::kinetics_contraption::assembler_turned(&shape, backwards);
+            game.native_set_block_property_with(pos, "backwards", if b { "true" } else { "false" }, 3);
+            game.native_set_block_property_with(pos, "shape", s, 3);
+        }
+        *claimed = true;
+        return;
+    }
     match w::action(k::kind_of(&block).is_some(), sneaking, axis.as_deref().and_then(k::axis_of), face) {
         w::Action::Nothing => return,
         w::Action::Rotate(value) => {

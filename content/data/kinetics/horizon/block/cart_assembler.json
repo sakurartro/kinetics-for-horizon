@@ -5,5 +5,10 @@
     "explosion_resistance": 6.0,
     "sounds": "minecraft:andesite"
   },
-  "item": true
+  "item": true,
+  "state_properties": {
+    "backwards": {
+      "type": "boolean"
+    }
+  }
 }

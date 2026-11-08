@@ -67,7 +67,12 @@ fn kinetics_settle(game: &mut crate::game::Game<'_>, dimension: &str) {
                 signal,
             );
         }
-        if crate::game::kinetics_clock::is_clock(&name) || name == crate::game::kinetics_drill::BLOCK || name == crate::game::kinetics_contraption::PISTON || name == crate::game::kinetics_contraption::BEARING {
+        if name == crate::game::kinetics_contraption::PISTON {
+            // The poles are at its back, so the shaft comes in at its side.
+            let facing = cell.borrow().native_block_property(p, "facing")?;
+            return k::crank_node(crate::game::kinetics_contraption::piston_input(&facing), 0);
+        }
+        if crate::game::kinetics_clock::is_clock(&name) || name == crate::game::kinetics_drill::BLOCK || name == crate::game::kinetics_contraption::BEARING {
             // A cuckoo clock or a drill: a shaft at its back, giving no speed.
             return k::crank_node(&cell.borrow().native_block_property(p, "facing")?, 0);
         }

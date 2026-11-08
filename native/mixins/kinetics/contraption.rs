@@ -151,6 +151,19 @@ pub fn cells(at: [f64; 3]) -> Vec<Pos> {
     out
 }
 
+/// The facing a piston's shaft input is taken from (`crank_node` puts the shaft opposite it): the poles are behind the
+/// piston, so its shaft joins at its left side looking along `facing` (the south side for a vertical one), as in
+/// Create where the axis is across the piston's.
+pub fn piston_input(facing: &str) -> &'static str {
+    match facing {
+        "north" => "east",
+        "east" => "south",
+        "south" => "west",
+        "west" => "north",
+        _ => "north",
+    }
+}
+
 /// `MechanicalPistonBlockEntity.getMovementSpeed`: blocks a tick from the RPM (`convertToLinear` is RPM / 512), at most .49.
 pub fn piston_speed(rpm: f32) -> f64 {
     f64::from(rpm / 512.0).clamp(-0.49, 0.49)
@@ -504,6 +517,14 @@ mod tests {
         // 1/16 block a tick: Create's animation speed 100, break speed 0.2.
         assert_eq!(drill_rpm(SPEED), 20.0);
         assert_eq!(drill_rpm(0.0), 100.0 / 128.0);
+    }
+
+    #[test]
+    fn piston_shaft_is_on_the_left() {
+        // Facing north, the shaft is west (crank_node("east") puts it west); facing east, north.
+        assert_eq!(piston_input("north"), "east");
+        assert_eq!(piston_input("east"), "south");
+        assert_eq!(piston_input("up"), "north");
     }
 
     #[test]

@@ -20,6 +20,10 @@ fn kinetics_drill_place(
         let axis = ["x", "y", "z"][m::axis(*dir)];
         shaft[i] = level.native_state_with_property(neighbour, "axis", axis) == Some(neighbour);
     }
+    // A piston takes its shaft at the side (its poles are at the back): no turning it to a shaft.
+    if level.native_state_block(state) == Some(crate::game::kinetics_contraption::PISTON) {
+        shaft = [false; 6];
+    }
     let look = m::nearest_looking(context.yaw, context.pitch);
     let facing = d::placement_facing(look, context.sneaking, m::preferred(shaft));
     if let Some(placed) = level.native_state_with_property(state, "facing", m::dir_name(facing)) {

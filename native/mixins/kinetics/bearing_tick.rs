@@ -1,6 +1,7 @@
 // Every tick of a mechanical bearing (BUR.md phase 6, Create's `MechanicalBearingBlockEntity`): once it has speed it
 // takes what is glued to the block in front of it and turns it about its axis (contraption_tick.rs does the turning,
-// and puts it down when the bearing stops). A refused ask (nothing glued there yet) is asked again next tick.
+// and puts it down when the bearing stops). A refused ask (nothing glued there yet) is asked again next tick. It
+// turns about the positive end of its axis, as Create's speeds are signed.
 fn kinetics_bearing_tick(game: &mut crate::game::Game<'_>, pos: [i32; 3], entity: &mut ModBlockEntity) {
     use crate::game::{kinetics as k, kinetics_contraption as c, kinetics_motor as m};
     use horizon_world::nbt::{JavaString, Tag};
@@ -14,7 +15,17 @@ fn kinetics_bearing_tick(game: &mut crate::game::Game<'_>, pos: [i32; 3], entity
         Some(Tag::Float(bits)) => f32::from_bits(*bits),
         _ => 0.0,
     };
-    if speed == 0.0 || matches!(entity.nbt.get(&JavaString::from(c::RUNNING_KEY)), Some(Tag::Int(1))) {
+    if matches!(entity.nbt.get(&JavaString::from(c::RUNNING_KEY)), Some(Tag::Int(1))) {
+        // Running with no structure of its own left (its marker gone): free again.
+        let turning = game.others.iter().any(|o| {
+            matches!(game.persist.raw.get(&o.id).and_then(|t| t.get("data")).and_then(|d| d.get("bearing")), Some(Tag::IntArray(p)) if p[..] == pos[..])
+        });
+        if turning {
+            return;
+        }
+        entity.nbt.insert(JavaString::from(c::RUNNING_KEY), Tag::Int(0));
+    }
+    if speed == 0.0 {
         return;
     }
     c::REQUESTS.lock().unwrap().push(c::Request {
@@ -25,7 +36,7 @@ fn kinetics_bearing_tick(game: &mut crate::game::Game<'_>, pos: [i32; 3], entity
         extra: None,
         feedback: false,
         owner: Some((pos, c::RUNNING_KEY, 1)),
-        spin: Some(f),
+        spin: Some(f.map(i32::abs)),
         cart: None,
     });
 }

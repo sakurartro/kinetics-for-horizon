@@ -25,14 +25,14 @@ fn kinetics_gearbox_submit(
     let centre = [0.5; 3];
     let around = [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
     draw.light = k::part_light(around.map(|d| game.native_light([pos[0] + d[0], pos[1] + d[1], pos[2] + d[2]])));
-    // Create's box over our placeholder, a hair larger so it covers it; laid along the box's axis like the casing's.
+    // Create's box over our placeholder, a hair larger so it covers it; turned as Create's block state turns it.
     draw.push();
     draw.translate(centre);
     draw.scale([1.001; 3]);
     draw.translate([-0.5; 3]);
-    if let Some((turn, degrees)) = k::lay_along(box_axis) {
-        draw.rotate_about(turn, degrees, centre);
-    }
+    let (x, y) = k::axis_turn(box_axis);
+    draw.rotate_about([0.0, 1.0, 0.0], -y, centre);
+    draw.rotate_about([1.0, 0.0, 0.0], -x, centre);
     game.native_draw_model(draw, g::STATIC_LOOK, 0xFF_FFFF);
     draw.pop();
     for (axis, positive) in g::faces(box_axis) {

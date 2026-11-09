@@ -693,6 +693,16 @@ pub fn lay_along(axis: usize) -> Option<([f32; 3], f32)> {
     }
 }
 
+/// Create's block state turns (x, y) for a model built along y lying along `axis` (its shaft and casing blockstates):
+/// the same lie as `lay_along` but rolled as Create's static models expect. Clockwise, x first, as a block state's.
+pub fn axis_turn(axis: usize) -> (f32, f32) {
+    match axis {
+        0 => (90.0, 90.0),
+        2 => (90.0, 180.0),
+        _ => (0.0, 0.0),
+    }
+}
+
 /// Half a tooth (22.5 degrees, 8 teeth) on every other small cogwheel, so
 /// neighbours' teeth fall between each other (Create offsets them too).
 pub fn tooth_offset(kind: Kind, axis: usize, pos: Pos) -> f32 {

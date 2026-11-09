@@ -2,7 +2,7 @@
 // after a reload or its chunk coming back: entity ids change, so tagged displays no contraption holds are removed),
 // then moves a step toward its target (or waits while its drills break what is in the way, or for good against a
 // solid block) and, there, puts its blocks back into the world (Create's
-// `Contraption.addBlocksToWorld`; a block whose place is taken drops as an item) and goes.
+// `Contraption.addBlocksToWorld`: what is in its place is broken, or the moved block drops if it can't go in) and goes.
 fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) {
     use crate::game::kinetics_contraption as c;
     use horizon_world::nbt::Tag;
@@ -73,11 +73,16 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
         let from = r.anchor;
         let mut boxes: Vec<c::Glue> = glues.iter().map(|g| g.1).collect();
         boxes.extend(r.extra);
+        // The block it is anchored to (piston, bearing, a cart's assembler) and the poles stay (`isAnchoringBlockAt`).
+        let anchoring = r.owner.map(|o| o.0).or(r.cart.map(|_| [from[0], from[1] - 1, from[2]]));
         let found = c::collect(
             from,
             &boxes,
             |p| {
                 let facts = game.res.facts().get(game.world.block(p[0], p[1], p[2]));
+                if Some(p) == anchoring || &*facts.name == c::POLE {
+                    return c::Movable::Skip;
+                }
                 let foreign = matches!(game.world.block_entities.get(&(p[0], p[1], p[2])), Some(e) if !matches!(e, BlockEntity::Mod(_)));
                 c::movable(&facts.name, facts.hardness, facts.has_class("LiquidBlock"), foreign)
             },
@@ -148,6 +153,14 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
             if let Some((p, _, _)) = r.owner {
                 data.insert("bearing".into(), Tag::IntArray(p.to_vec()));
             }
+        }
+        if let Some((p, c::EXTENDED_KEY, out)) = r.owner {
+            // A piston's: its place, and the offsets of the far end of the poles and of the near one, so that turned
+            // the other way it takes the structure back (piston_tick.rs).
+            let (far, near) = if out == 1 { (r.by, [0; 3]) } else { ([0; 3], r.by) };
+            data.insert("piston".into(), Tag::IntArray(p.to_vec()));
+            data.insert("out".into(), doubles(far.map(f64::from)));
+            data.insert("in".into(), doubles(near.map(f64::from)));
         }
         if let Some((cart, yaw)) = r.cart {
             // A cart's: the cart it rides, and its first yaw, which it turns from.
@@ -220,6 +233,12 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
             _ => [0; 3],
         };
         let at = |off: [f64; 3], r: [i32; 3]| [0, 1, 2].map(|i| f64::from(origin[i] + r[i]) + off[i]);
+        // A cart's are made where its marker (its cart) is now, its origin may be far away and unloaded; c_ride puts
+        // them in place the same tick.
+        let riding = data
+            .get("cart")
+            .and_then(|_| game.others.iter().find(|o| o.id == l.marker))
+            .map(|o| [o.position.x, o.position.y, o.position.z]);
         // Its displays: made again when one is missing.
         if l.displays.is_empty() || l.displays.iter().any(|id| !alive.contains(id)) {
             for id in l.displays.drain(..) {
@@ -237,7 +256,7 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
                 nbt.insert("Tags".into(), Tag::List(vec![Tag::String(c::PIECE_TAG.into())]));
                 // Clients ease each tick's move over the tick.
                 nbt.insert("teleport_duration".into(), Tag::Int(1));
-                match game.native_summon(dimension, "minecraft:block_display", at(offset, rel(p)), nbt) {
+                match game.native_summon(dimension, "minecraft:block_display", riding.unwrap_or_else(|| at(offset, rel(p))), nbt) {
                     Some(id) => l.displays.push(id),
                     // A chunk that isn't loaded: try again next tick.
                     None => {
@@ -280,7 +299,7 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
         let way = c::way(&pieces, |q| c_in_way(game, q));
         if way.blocked || !way.drill.is_empty() {
             for (i, cell) in way.drill {
-                c_drill(game, l.marker, i, &list[i], cell, c::drill_rpm(speed));
+                c_drill(game, l.marker, i, &list[i], cell, c::drill_rpm(speed, c::DRILL_MIN));
             }
             return true;
         }
@@ -304,11 +323,13 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
         }
     }
 
-    /// What the world block at `q` is to a contraption entering it.
+    /// What the world block at `q` is to a contraption entering it. A drill leaves a block with no collision shape
+    /// (grass, a torch, a rail) alone (`DrillMovementBehaviour.canBreak`).
     fn c_in_way(game: &crate::game::Game<'_>, q: [i32; 3]) -> crate::game::kinetics_contraption::InWay {
         use crate::game::{kinetics_contraption as c, kinetics_drill as d};
         let f = game.res.facts().get(game.world.block(q[0], q[1], q[2]));
-        c::InWay { solid: f.legacy_solid, breakable: d::breakable(&f.name, f.hardness, f.has_class("LiquidBlock")) }
+        let breakable = d::breakable(&f.name, f.hardness, f.has_class("LiquidBlock")) && !game.collision_empty(q);
+        c::InWay { solid: f.legacy_solid, breakable }
     }
 
     /// A cart's contraption (BUR.md phase 5, Create's `OrientedContraptionEntity` riding a minecart): it sits on its
@@ -401,10 +422,13 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
         if speed >= 1.0 / 512.0 {
             for (k, q) in list.iter().enumerate() {
                 let Some(f) = c_facing(q) else { continue };
-                if !c::drills_toward(c::rotate(f.map(f64::from), UP, turn), motion) {
+                let f = c::rotate(f.map(f64::from), UP, turn);
+                if !c::drills_toward(f, motion) {
                     continue;
                 }
-                let cell = centre(rel(q)).map(|x| x.floor() as i32);
+                // It works a little ahead of its block's centre (`getActiveAreaOffset`).
+                let at = centre(rel(q));
+                let cell = [0, 1, 2].map(|k| (at[k] + f[k] * c::DRILL_REACH).floor() as i32);
                 if c_in_way(game, cell).breakable {
                     drilling.push((k, cell));
                 }
@@ -416,7 +440,7 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
             game.carts[i].velocity = Vec3::new(s[0], s[1], s[2]);
         }
         for &(k, cell) in &drilling {
-            c_drill(game, l.marker, k, &list[k], cell, c::drill_rpm(speed));
+            c_drill(game, l.marker, k, &list[k], cell, c::drill_rpm(speed, c::CART_DRILL_MIN));
         }
         let shown = NativeDisplay {
             translation: c::rotate([-0.5; 3], UP, turn).map(|x| x as f32),
@@ -446,8 +470,9 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
     }
 
     /// A turning contraption's tick (BUR.md phase 6, Create's `MechanicalBearingBlockEntity`): the bearing's speed turns
-    /// it about the axis through its anchor, drills dig where they go and anything else solid holds it back; with the
-    /// bearing still it settles on a quarter turn and is put down turned.
+    /// it about the axis through its anchor, and drills dig where they go, holding it while they do; terrain doesn't
+    /// stop it (only a `TranslatingContraption` collides with blocks, `ContraptionCollider.collideBlocks`). With the
+    /// bearing still it is put down on the nearest quarter turn.
     fn c_spin(
         game: &mut crate::game::Game<'_>,
         dimension: &str,
@@ -503,10 +528,10 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
             return true;
         }
         let way = c::way(&pieces, |q| c_in_way(game, q));
-        if way.blocked || !way.drill.is_empty() {
+        if !way.drill.is_empty() {
             for (i, cell) in way.drill {
                 let m = motions[i];
-                c_drill(game, l.marker, i, &list[i], cell, c::drill_rpm((m[0] * m[0] + m[1] * m[1] + m[2] * m[2]).sqrt()));
+                c_drill(game, l.marker, i, &list[i], cell, c::drill_rpm((m[0] * m[0] + m[1] * m[1] + m[2] * m[2]).sqrt(), c::DRILL_MIN));
             }
             return true;
         }
@@ -583,45 +608,57 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
         spin: Option<([i32; 3], i32)>,
     ) -> bool {
         use crate::game::kinetics_contraption as c;
+        use horizon_core::position::BlockPos;
         use horizon_world::nbt::Tag;
         // A bearing's blocks land turned by the quarter turns it made, and so do their `facing` and `axis`.
         let turned = |v: [i32; 3]| spin.map_or(v, |(axis, q)| c::turn(v, axis, q));
+        let registry = game.pack.assets.registry;
         for p in list {
             let r = match p.get("pos") {
                 Some(Tag::IntArray(v)) if v.len() == 3 => turned([v[0], v[1], v[2]]),
                 _ => continue,
             };
-            let mut st = p.get("state").cloned().unwrap_or(Tag::Compound(Compound::new()));
-            if let (Some((axis, q)), Some(Tag::Compound(props))) = (spin, st.get_mut("Properties")) {
-                for (key, value) in props.iter_mut() {
-                    if let Tag::String(v) = value {
-                        if let Some(t) = c::turn_property(&key.to_string_lossy(), &v.to_string_lossy(), axis, q) {
-                            *value = Tag::String(t.as_str().into());
+            let Some(mut state) = p.get("state").and_then(|s| game.state_from_nbt(s)) else { continue };
+            if let (Some((axis, q)), Some(s)) = (spin, registry.state(state).cloned()) {
+                for (key, value) in &s.properties {
+                    let Some(t) = c::turn_property(key, value, axis, q) else { continue };
+                    // A value the block doesn't take (a furnace turned to face up) keeps the one it had.
+                    if let Some(mut now) = registry.state(state).cloned() {
+                        now.properties.insert(key.clone(), t);
+                        if let Ok(id) = registry.resolve(&now) {
+                            state = id;
                         }
                     }
                 }
             }
-            let Some(state) = game.state_from_nbt(&st) else { continue };
             let at = c::landing(origin, offset, r);
+            let here = BlockPos::new(at[0], at[1], at[2]);
+            // `addBlocksToWorld`: the moved block drops (its loot) if the place is unbreakable, or it has no collision
+            // shape and what is there has one; otherwise what is there is broken, with its drops, and it goes in.
             let facts = game.res.facts().get(game.world.block(at[0], at[1], at[2]));
-            let free = c::movable(&facts.name, facts.hardness, facts.has_class("LiquidBlock"), false) == c::Movable::Skip;
-            if free && game.native_set_block(dimension, at, state, c::PLACE_FLAGS) {
-                if let (Some(Tag::Compound(saved)), Some(BlockEntity::Mod(m))) =
-                    (p.get("nbt"), game.world.block_entities.get_mut(&(at[0], at[1], at[2])))
-                {
-                    m.nbt.extend(saved.clone());
+            let empty = {
+                let mut scene = horizon_client::collisions::SceneCollisions { world: &game.world, binding: game.collision, subject: None };
+                game.collision
+                    .collision_shape_with_context(&mut scene, state, here, &horizon_world::collision_context::CollisionContext::empty(false))
+                    .is_ok_and(|shape| shape.is_empty())
+            };
+            let air = matches!(&*facts.name, "minecraft:air" | "minecraft:cave_air" | "minecraft:void_air");
+            if facts.hardness >= 0.0 && !(empty && !game.collision_empty(at)) {
+                if !air {
+                    // An error here is the level's events after the break, which the game itself only reports.
+                    let _ = game.destroy_block_dropping(at);
                 }
-                continue;
+                if game.native_set_block(dimension, at, state, c::PLACE_FLAGS) {
+                    if let (Some(Tag::Compound(saved)), Some(BlockEntity::Mod(m))) =
+                        (p.get("nbt"), game.world.block_entities.get_mut(&(at[0], at[1], at[2])))
+                    {
+                        m.nbt.extend(saved.clone());
+                    }
+                    continue;
+                }
             }
-            // shortcut: the item is the block's own id (true for our blocks and most others, not for a wall torch
-            // or redstone wire), with no loot table; use the block's loot when Horizon has a helper for it.
-            let name = game.res.facts().get(state).name.to_string();
-            let mut item = Compound::new();
-            item.insert("id".into(), Tag::String(name.as_str().into()));
-            item.insert("count".into(), Tag::Int(1));
-            let mut nbt = Compound::new();
-            nbt.insert("Item".into(), Tag::Compound(item));
-            game.native_summon(dimension, "minecraft:item", at.map(|v| f64::from(v) + 0.5), nbt);
+            // `Block.dropResources(state, level, pos, null)`.
+            game.with_level(|_, level, _| level.drop_resources_now(here, state));
         }
         // The glue comes back where the blocks are.
         if let Some(Tag::List(boxes)) = data.get("glue") {

@@ -27,14 +27,14 @@ fn kinetics_crank_submit(
     if let Some((turn, degrees)) = c::lay_along(facing) {
         draw.rotate_about(turn, degrees, centre);
     }
-    // Create's models have the wall on their +z side: turned up first, to ours.
-    draw.push();
-    draw.rotate_about([1.0, 0.0, 0.0], 90.0, centre);
     let look = game.native_draw_model(draw, c::LOOK_MODELS[0], 0xFF_FFFF);
     if look {
+        // Create's handle has the wall on its +z side: turned up first, to ours.
+        draw.push();
+        draw.rotate_about([1.0, 0.0, 0.0], 90.0, centre);
         game.native_draw_model(draw, c::LOOK_MODELS[1], 0xFF_FFFF);
+        draw.pop();
     }
-    draw.pop();
     if !look {
         game.native_draw_model(draw, c::PART_MODEL, 0xFF_FFFF);
     }

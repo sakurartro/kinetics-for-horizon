@@ -33,7 +33,7 @@ MODELS = ["shaft", "cogwheel", "large_cogwheel"]
 MODELS += ["cogwheel_shaftless", "large_cogwheel_shaftless", "shaft_half", "andesite_casing", "encased_shaft/block_andesite"]
 MODELS += [f"andesite_encased_{big}cogwheel{ends}" for big in ("", "large_")
            for ends in ("", "_top", "_bottom", "_top_bottom")]
-MODELS += ["hand_crank/handle"]  # crank.rs LOOK_MODELS (its shaft_half is the casing's)
+MODELS += ["hand_crank/block", "hand_crank/handle"]  # crank.rs LOOK_MODELS
 # The cuckoo clocks (clock.rs LOOK_MODELS).
 MODELS += [f"cuckoo_clock/{m}" for m in ("block", "hour_hand", "minute_hand", "left_door", "right_door", "pig", "creeper")]
 MODELS += ["mechanical_drill/block", "mechanical_drill/head"]  # drill.rs LOOK_MODELS (body built up, head south)

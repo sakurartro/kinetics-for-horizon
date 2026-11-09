@@ -28,7 +28,7 @@ fn kinetics_piston_tick(game: &mut crate::game::Game<'_>, pos: [i32; 3], entity:
     });
     if let Some(id) = moving {
         if let Some(Tag::Compound(d)) = game.persist.raw.get_mut(&id).and_then(|t| t.get_mut("data")) {
-            if let Some(end) = d.get(if v > 0.0 { "out" } else { "in" }).cloned() {
+            if let Some(end) = d.get(&JavaString::from(if v > 0.0 { "out" } else { "in" })).cloned() {
                 d.insert("target".into(), end);
             }
             d.insert("speed".into(), Tag::Double(v.abs().to_bits()));

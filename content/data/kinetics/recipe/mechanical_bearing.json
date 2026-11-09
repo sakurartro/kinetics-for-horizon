@@ -2,14 +2,14 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
+    "B": "#minecraft:wooden_slabs",
     "C": "kinetics:andesite_casing",
-    "S": "kinetics:shaft",
-    "T": "minecraft:smooth_stone"
+    "I": "kinetics:shaft"
   },
   "pattern": [
-    "T",
+    "B",
     "C",
-    "S"
+    "I"
   ],
   "result": {
     "id": "kinetics:mechanical_bearing",

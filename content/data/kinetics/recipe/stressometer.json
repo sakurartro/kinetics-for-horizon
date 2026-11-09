@@ -2,9 +2,7 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
-    "minecraft:compass",
-    "kinetics:andesite_casing",
-    "minecraft:redstone"
+    "kinetics:speedometer"
   ],
   "result": {
     "id": "kinetics:stressometer",

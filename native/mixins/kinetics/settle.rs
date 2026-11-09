@@ -68,9 +68,13 @@ fn kinetics_settle(game: &mut crate::game::Game<'_>, dimension: &str) {
             );
         }
         if name == crate::game::kinetics_contraption::PISTON {
-            // The poles are at its back, so the shaft comes in at its side.
-            let facing = cell.borrow().native_block_property(p, "facing")?;
-            return k::crank_node(crate::game::kinetics_contraption::piston_input(&facing), 0);
+            // A piston: a shaft through it across its facing, on the axis `axis_along_first` gives
+            // (`DirectionalAxisKineticBlock.hasShaftTowards`: both ends).
+            use crate::game::kinetics_speedometer as sp;
+            let g = cell.borrow();
+            let facing = sp::dir_vec(&g.native_block_property(p, "facing")?)?;
+            let along = g.native_block_property(p, "axis_along_first").as_deref() == Some("true");
+            return k::node(&name, Some(["x", "y", "z"][sp::rotation_axis(facing, along)]));
         }
         if crate::game::kinetics_clock::is_clock(&name) || name == crate::game::kinetics_drill::BLOCK || name == crate::game::kinetics_contraption::BEARING {
             // A cuckoo clock or a drill: a shaft at its back, giving no speed.
@@ -206,7 +210,9 @@ fn kinetics_settle(game: &mut crate::game::Game<'_>, dimension: &str) {
     }
     for pos in moved {
         game.native_block_entity_sync(pos);
-        if game.native_block(pos) == crate::game::kinetics_stressometer::BLOCK {
+        // Both gauges' comparators follow them (`GaugeBlockEntity.setChanged` -> `updateNeighbourForOutputSignal`).
+        let b = game.native_block(pos);
+        if b == crate::game::kinetics_stressometer::BLOCK || b == crate::game::kinetics_speedometer::BLOCK {
             game.native_update_output_neighbors(dimension, pos);
         }
     }

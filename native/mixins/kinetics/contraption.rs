@@ -22,8 +22,10 @@ pub const PIECE_TAG: &str = "kinetics.contraption_piece";
 pub const GLUE_TAG: &str = "kinetics.glue";
 pub const PISTON: &str = "kinetics:mechanical_piston";
 pub const POLE: &str = "kinetics:piston_extension_pole";
-/// The piston's block entity key: 1 while its structure is at the far end of the poles.
+/// The piston's block entity key: 1 while its structure is at the far end of the poles (or going there).
 pub const EXTENDED_KEY: &str = "Extended";
+/// The piston's block entity key: the poles it went out along, which it comes back along.
+pub const REACH_KEY: &str = "Reach";
 /// Poles a piston counts (Create's `maxPoleLength`-ish; each pole is a block of reach).
 pub const MAX_POLES: i32 = 64;
 pub const BEARING: &str = "kinetics:mechanical_bearing";
@@ -149,22 +151,33 @@ pub fn cells(at: [f64; 3]) -> Vec<Pos> {
     out
 }
 
-/// The facing a piston's shaft input is taken from (`crank_node` puts the shaft opposite it): the poles are behind the
-/// piston, so its shaft joins at its left side looking along `facing` (the south side for a vertical one), as in
-/// Create where the axis is across the piston's.
-pub fn piston_input(facing: &str) -> &'static str {
-    match facing {
-        "north" => "east",
-        "east" => "south",
-        "south" => "west",
-        "west" => "north",
-        _ => "north",
+/// A piston's `axis_along_first` as it is placed facing `facing` (`DirectionalAxisKineticBlock.getStateForPlacement`):
+/// `player_x` says the player faces along x, `shaft(side)` whether the neighbour on `side` has a shaft toward it.
+pub fn piston_along_first(facing: Pos, player_x: bool, shaft: impl Fn(Pos) -> bool) -> bool {
+    if facing[1] == 0 {
+        // Across the piston, upright if a shaft is above or below (the sideways ones never count).
+        return if shaft([0, 1, 0]) || shaft([0, -1, 0]) { facing[0] != 0 } else { facing[2] != 0 };
     }
+    let mut preferred: Option<Pos> = None;
+    for side in [[0, 0, -1], [1, 0, 0], [0, 0, 1], [-1, 0, 0]] {
+        if !shaft(side) {
+            continue;
+        }
+        if preferred.is_some_and(|p| (p[0] != 0) != (side[0] != 0)) {
+            preferred = None;
+            break;
+        }
+        preferred = Some(side);
+    }
+    preferred.map_or(player_x, |p| p[0] != 0)
 }
 
-/// `MechanicalPistonBlockEntity.getMovementSpeed`: blocks a tick from the RPM (`convertToLinear` is RPM / 512), at most .49.
-pub fn piston_speed(rpm: f32) -> f64 {
-    f64::from(rpm / 512.0).clamp(-0.49, 0.49)
+/// `MechanicalPistonBlockEntity.getMovementSpeed`: blocks a tick the structure goes out (negative: in) from the RPM
+/// along the shaft (`convertToLinear` is RPM / 512, at most .49), the sign set by the facing.
+pub fn piston_speed(rpm: f32, facing: Pos) -> f64 {
+    let step = facing.iter().sum::<i32>();
+    let modifier = if facing[2] != 0 { -step } else { step };
+    f64::from(rpm / 512.0).clamp(-0.49, 0.49) * f64::from(-modifier)
 }
 
 /// A moving drill works only facing the way it goes (Create's `VecHelper.isVecPointingTowards`).
@@ -174,25 +187,16 @@ pub fn drills_toward(facing: [f64; 3], motion: [f64; 3]) -> bool {
 
 // ---- Bearing (BUR.md phase 6, Create's `MechanicalBearingBlockEntity`) ----
 
-/// Degrees a tick per RPM (`getAngularSpeed`: speed * 3 / 10), and the most a tick turns (a fast bearing would skip walls).
+/// Degrees a tick per RPM (`getAngularSpeed`: speed * 3 / 10).
 pub const DEG_PER_RPM: f64 = 0.3;
-pub const MAX_DEG: f64 = 24.0;
-/// Degrees a tick a stopped bearing takes to settle on the nearest quarter turn.
-pub const SETTLE_DEG: f64 = 3.0;
 
-/// The angle after a tick (degrees, 0..360) and whether it is at rest on a quarter turn, where it can be put down:
-/// a bearing with speed turns on, one without goes to the nearest multiple of 90.
+/// The angle after a tick (degrees, 0..360) and whether it is to be put down: a bearing with speed turns on, one
+/// without is put down at once on the nearest quarter turn (ROTATE_PLACE).
 pub fn spin_step(angle: f64, rpm: f32) -> (f64, bool) {
     if rpm != 0.0 {
-        return ((angle + (f64::from(rpm) * DEG_PER_RPM).clamp(-MAX_DEG, MAX_DEG)).rem_euclid(360.0), false);
+        return ((angle + f64::from(rpm) * DEG_PER_RPM).rem_euclid(360.0), false);
     }
-    let goal = (angle / 90.0).round() * 90.0;
-    let d = goal - angle;
-    if d.abs() <= SETTLE_DEG {
-        (goal.rem_euclid(360.0), true)
-    } else {
-        (angle + SETTLE_DEG * d.signum(), false)
-    }
+    (((angle / 90.0).round() * 90.0).rem_euclid(360.0), true)
 }
 
 /// `v` turned by `deg` about the unit `axis` (right-handed, Rodrigues).
@@ -345,16 +349,23 @@ pub fn facing_yaw(player_yaw: f32) -> f64 {
     f64::from(((f64::from(player_yaw) / 90.0 + 0.5).floor() as i32 & 3) * 90)
 }
 
+/// A drill's least break speed (`getBlockBreakingSpeed`'s lower limit): on a cart (a `MountedContraption`), and on
+/// anything else.
+pub const CART_DRILL_MIN: f32 = 1.0;
+pub const DRILL_MIN: f32 = 1.0 / 128.0;
+/// How far ahead of its block's centre a moving drill works (`DrillMovementBehaviour.getActiveAreaOffset`).
+pub const DRILL_REACH: f64 = 0.65;
+
 /// A moving drill's break speed (`BlockBreakingMovementBehaviour.getBlockBreakingSpeed` from
-/// `MovementContext.getAnimationSpeed`), as the RPM `kinetics_drill::step` takes (it breaks at RPM / 100).
-pub fn drill_rpm(blocks_per_tick: f64) -> f32 {
+/// `MovementContext.getAnimationSpeed`, at least `lower`), as the RPM `kinetics_drill::step` takes (it breaks at RPM / 100).
+pub fn drill_rpm(blocks_per_tick: f64, lower: f32) -> f32 {
     let len = blocks_per_tick.abs();
     let anim = if len < 1.0 / 512.0 { 0.0 } else { ((len * 1000.0 + 100.0) as i32 / 100 * 100) as f32 };
-    (anim / 500.0).clamp(1.0 / 128.0, 16.0) * 100.0
+    (anim / 500.0).clamp(lower, 16.0) * 100.0
 }
 
-/// What a block in the way is to a contraption: solid ones (`BlockState.isSolid`) stop it, breakable ones a drill
-/// takes (`kinetics_drill::breakable`).
+/// What a block in the way is to a contraption: solid ones (`BlockState.isSolid`) stop it, ones a drill can break
+/// it takes (`kinetics_drill::breakable` with a collision shape: `DrillMovementBehaviour.canBreak`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct InWay {
     pub solid: bool,
@@ -422,8 +433,13 @@ pub struct Live {
 
 pub static LIVE: std::sync::Mutex<Vec<Live>> = std::sync::Mutex::new(Vec::new());
 
-/// The first corner a player clicked with the glue, waiting for the second: (dimension, block).
-pub static PENDING: std::sync::Mutex<Option<(String, Pos)>> = std::sync::Mutex::new(None);
+/// The first corner each player clicked with the glue, waiting for the second: (player, dimension, block).
+pub static PENDING: std::sync::Mutex<Vec<(u128, String, Pos)>> = std::sync::Mutex::new(Vec::new());
+
+/// Whether a glued box's second corner is near enough its first (`SuperGlueSelectionHandler`: `closerThan(.., 24)`).
+pub fn glue_in_reach(a: Pos, b: Pos) -> bool {
+    (0..3).map(|i| f64::from(a[i] - b[i]).powi(2)).sum::<f64>() < 24.0 * 24.0
+}
 
 /// A contraption to assemble at the next tick (made by the debug command and the piston): from `anchor`, moving by
 /// `by` at `speed` blocks a tick, glued by the glue markers and `extra`.
@@ -533,7 +549,7 @@ mod tests {
     #[test]
     fn drills_dig_and_the_rest_stops() {
         let stone = InWay { solid: true, breakable: true };
-        let grass = InWay { solid: false, breakable: true };
+        let grass = InWay { solid: false, breakable: false };
         let bedrock = InWay { solid: true, breakable: false };
         let world = |rock: InWay| move |c: Pos| if c[0] >= 2 { rock } else { InWay::default() };
         // A drill at x 0 and a block behind it, moving +x by 1/16 into stone at x 2: free until it touches.
@@ -545,8 +561,8 @@ mod tests {
         let plain = [([1.0625, 0.0, 0.0], false)];
         assert!(way(&plain, world(stone)).blocked);
         assert_eq!(way(&plain, world(grass)), Way::default());
-        // A drill takes grass too (Create breaks whatever it enters).
-        assert_eq!(way(&at(1.0625), world(grass)).drill, vec![(0, [2, 0, 0])]);
+        // Nor does a drill take grass: it has no collision shape (`DrillMovementBehaviour.canBreak`), it goes through.
+        assert_eq!(way(&at(1.0625), world(grass)), Way::default());
     }
 
     #[test]
@@ -555,32 +571,49 @@ mod tests {
         assert!(!drills_toward([-1.0, 0.0, 0.0], [SPEED, 0.0, 0.0]));
         assert!(!drills_toward([0.0, 1.0, 0.0], [SPEED, 0.0, 0.0]));
         // 1/16 block a tick: Create's animation speed 100, break speed 0.2.
-        assert_eq!(drill_rpm(SPEED), 20.0);
-        assert_eq!(drill_rpm(0.0), 100.0 / 128.0);
+        assert_eq!(drill_rpm(SPEED, DRILL_MIN), 20.0);
+        assert_eq!(drill_rpm(0.0, DRILL_MIN), 100.0 / 128.0);
+        // On a cart, at least 1.
+        assert_eq!(drill_rpm(SPEED, CART_DRILL_MIN), 100.0);
     }
 
     #[test]
-    fn piston_shaft_is_on_the_left() {
-        // Facing north, the shaft is west (crank_node("east") puts it west); facing east, north.
-        assert_eq!(piston_input("north"), "east");
-        assert_eq!(piston_input("east"), "south");
-        assert_eq!(piston_input("up"), "north");
+    fn piston_shaft_axis() {
+        let none = |_: Pos| false;
+        // Sideways: across it level, or upright with a shaft above or below.
+        assert!(!piston_along_first([1, 0, 0], false, none));
+        assert!(piston_along_first([0, 0, 1], false, none));
+        assert!(piston_along_first([1, 0, 0], false, |s: Pos| s == [0, -1, 0]));
+        assert!(!piston_along_first([0, 0, -1], true, |s: Pos| s == [0, 1, 0]));
+        // Upright: the player's axis, or the one a shaft beside it is on (two crossing: the player's).
+        assert!(piston_along_first([0, 1, 0], true, none));
+        assert!(!piston_along_first([0, -1, 0], true, |s: Pos| s == [0, 0, 1]));
+        assert!(piston_along_first([0, 1, 0], false, |s: Pos| s == [-1, 0, 0]));
+        assert!(piston_along_first([0, 1, 0], false, |s: Pos| s == [-1, 0, 0] || s == [1, 0, 0]));
+        assert!(!piston_along_first([0, 1, 0], false, |s: Pos| s == [-1, 0, 0] || s == [0, 0, 1]));
     }
 
     #[test]
     fn piston_speeds() {
-        assert_eq!(piston_speed(16.0), 1.0 / 32.0);
-        assert_eq!(piston_speed(-256.0), -0.49);
-        assert_eq!(piston_speed(0.0), 0.0);
+        // Positive RPM pushes out facing south, west or down; pulls in facing north, east or up.
+        assert_eq!(piston_speed(16.0, [0, 0, 1]), 1.0 / 32.0);
+        assert_eq!(piston_speed(16.0, [0, 0, -1]), -1.0 / 32.0);
+        assert_eq!(piston_speed(16.0, [1, 0, 0]), -1.0 / 32.0);
+        assert_eq!(piston_speed(16.0, [-1, 0, 0]), 1.0 / 32.0);
+        assert_eq!(piston_speed(16.0, [0, 1, 0]), -1.0 / 32.0);
+        assert_eq!(piston_speed(-256.0, [0, -1, 0]), -0.49);
+        assert_eq!(piston_speed(0.0, [0, 0, 1]), 0.0);
     }
 
     #[test]
     fn spinning() {
-        // 16 RPM turns 4.8 degrees a tick; a stopped bearing settles on the nearest quarter and says so.
+        // 16 RPM turns 4.8 degrees a tick, -256 RPM -76.8 (no cap); a stopped bearing is put down on the nearest
+        // quarter at once.
         assert_eq!(spin_step(0.0, 16.0), (4.8, false));
         assert_eq!(spin_step(358.0, 16.0).0, (358.0f64 + 4.8).rem_euclid(360.0));
-        assert_eq!(spin_step(10.0, -1000.0).0, 346.0);
-        assert_eq!(spin_step(40.0, 0.0), (37.0, false));
+        assert!((spin_step(100.0, -256.0).0 - 23.2).abs() < 1e-9);
+        assert_eq!(spin_step(40.0, 0.0), (0.0, true));
+        assert_eq!(spin_step(46.0, 0.0), (90.0, true));
         assert_eq!(spin_step(88.0, 0.0), (90.0, true));
         assert_eq!(spin_step(359.0, 0.0), (0.0, true));
         assert_eq!(spin_step(0.0, 0.0), (0.0, true));
@@ -650,6 +683,9 @@ mod tests {
         assert_eq!(facing_yaw(134.0), 90.0);
         assert_eq!(facing_yaw(136.0), 180.0);
         assert_eq!(facing_yaw(-200.0), 180.0);
+        assert!(glue_in_reach([0, 0, 0], [23, 0, 0]));
+        assert!(!glue_in_reach([0, 0, 0], [24, 0, 0]));
+        assert!(!glue_in_reach([0, 0, 0], [14, 14, 14]));
     }
 
     #[test]

@@ -1,1 +1,9 @@
-{ "template": "minecraft:iron_chain", "properties": { "hardness": 1.5, "explosion_resistance": 6.0, "sounds": "minecraft:andesite" }, "item": true }
+{
+  "template": "minecraft:iron_chain",
+  "properties": {
+    "hardness": 1.5,
+    "explosion_resistance": 1.5,
+    "sounds": "minecraft:scaffolding"
+  },
+  "item": true
+}

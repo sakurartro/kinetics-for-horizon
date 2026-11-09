@@ -1,8 +1,25 @@
 {
   "template": "minecraft:glass",
-  "properties": { "hardness": 2.0, "explosion_resistance": 6.0, "sounds": "minecraft:stone" },
-  "state_properties": {
-    "facing": { "type": "enum", "values": ["north", "east", "south", "west", "up", "down"] }
+  "properties": {
+    "hardness": 1.5,
+    "explosion_resistance": 6.0,
+    "sounds": "minecraft:andesite"
   },
-  "item": true
+  "state_properties": {
+    "facing": {
+      "type": "enum",
+      "values": [
+        "north",
+        "east",
+        "south",
+        "west",
+        "up",
+        "down"
+      ]
+    }
+  },
+  "item": true,
+  "components": {
+    "minecraft:rarity": "epic"
+  }
 }

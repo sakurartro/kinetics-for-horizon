@@ -111,7 +111,8 @@ pub fn tick(dimension: &str) -> (Vec<Pos>, Vec<(Pos, f32)>) {
 /// The models the crank is drawn with: ours, and Create's (they exist only while the pack from
 /// `tools/create_look.py` is on; the game logs the missing ones and draws ours).
 pub const PART_MODEL: &str = "kinetics:block/crank_part";
-pub const LOOK_MODELS: [&str; 2] = ["create:block/shaft_half", "create:block/hand_crank/handle"];
+/// Create's base (`HAND_CRANK_BASE`, its 5 pixel axle) is built pointing up like ours; its handle has the wall on +z.
+pub const LOOK_MODELS: [&str; 2] = ["create:block/hand_crank/block", "create:block/hand_crank/handle"];
 
 /// The axis (0 x, 1 y, 2 z) of a `facing`.
 pub fn axis_of(facing: &str) -> Option<usize> {

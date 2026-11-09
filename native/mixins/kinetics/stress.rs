@@ -41,12 +41,16 @@ pub const KEYS: [&str; 4] = [CAPACITY_KEY, STRESS_KEY, SIZE_KEY, THEORETICAL_KEY
 /// `BlockStressValues` defaults: (block, impact, capacity), in su at 1 RPM. Create's values for the blocks it has
 /// (`AllBlocks.java`: shafts, cogwheels, gearbox, clutch, gearshift, chain drives, the casings' variants and the
 /// speed controller are all `setNoImpact`, so 0 and not listed); blocks not listed have none.
-const VALUES: [(&str, f32, f32); 6] = [
+const VALUES: [(&str, f32, f32); 10] = [
     ("mechanical_drill", 4.0, 0.0),
     ("mechanical_piston", 4.0, 0.0),
     ("mechanical_bearing", 4.0, 0.0),
     ("creative_motor", 0.0, 16384.0),
     ("hand_crank", 0.0, 8.0),
+    ("water_wheel", 0.0, 32.0),
+    ("large_water_wheel", 0.0, 128.0),
+    ("cuckoo_clock", 1.0, 0.0),
+    ("mysterious_cuckoo_clock", 1.0, 0.0),
     // Not Create's: the engines are not ported; the powered shaft takes the steam engine's capacity.
     ("powered_shaft", 0.0, 1024.0),
 ];
@@ -173,6 +177,9 @@ mod tests {
     fn defaults_match_create() {
         assert_eq!(capacity("kinetics:creative_motor"), 16384.0);
         assert_eq!(capacity("kinetics:hand_crank"), 8.0);
+        assert_eq!(capacity("kinetics:water_wheel"), 32.0);
+        assert_eq!(capacity("kinetics:large_water_wheel"), 128.0);
+        assert_eq!(impact("kinetics:cuckoo_clock"), 1.0);
         assert_eq!(impact("kinetics:shaft"), 0.0);
         assert_eq!(impact("kinetics:gearbox"), 0.0);
         assert_eq!(capacity("kinetics:unknown"), 0.0);

@@ -2,15 +2,14 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "A": "minecraft:andesite",
+    "B": "#minecraft:wooden_slabs",
     "C": "kinetics:andesite_casing",
-    "P": "minecraft:piston",
-    "S": "kinetics:shaft"
+    "I": "kinetics:piston_extension_pole"
   },
   "pattern": [
-    " P ",
-    "ASA",
-    " C "
+    "B",
+    "C",
+    "I"
   ],
   "result": {
     "id": "kinetics:mechanical_piston",

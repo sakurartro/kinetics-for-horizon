@@ -1174,6 +1174,21 @@ bindings = [
   { name = "entity", ty = "&mut ModBlockEntity", value = "&mut *entity" },
 ]
 
+# Each frame: the bearing's turning half shaft and its top (Create's, with the look pack on).
+[[injection]]
+id = "bearing-submit"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_block_entity_submit"
+helper = "bearing_submit.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+  { name = "block", ty = "&str", value = "block" },
+  { name = "state", ty = "BlockStateId", value = "state" },
+  { name = "entity", ty = "&ModBlockEntity", value = "entity" },
+  { name = "draw", ty = "&mut BlockEntityDraw", value = "&mut *draw" },
+]
+
 # Every tick of a cart assembler: a minecart on it gets what is glued above it (powered) or is braked (not).
 [[injection]]
 id = "assembler-tick"

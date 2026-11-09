@@ -1,10 +1,13 @@
 {
-  "type": "minecraft:crafting_shapeless",
+  "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "ingredients": [
-    "kinetics:andesite_casing",
-    "kinetics:shaft",
-    "minecraft:redstone"
+  "key": {
+    "B": "minecraft:clock",
+    "C": "kinetics:brass_casing"
+  },
+  "pattern": [
+    "B",
+    "C"
   ],
   "result": {
     "id": "kinetics:rotation_speed_controller",

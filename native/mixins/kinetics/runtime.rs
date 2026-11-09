@@ -225,15 +225,16 @@ fn controller_partner(p: Pos, n: Node, get: &impl Fn(Pos) -> Option<Node>) -> Op
 }
 
 /// The speed the controller link hands from one side to the other (`SpeedControllerBlockEntity.getConveyedSpeed`):
-/// the target, but a side already turning the target's way at least that fast keeps going; nothing without input
-/// or target. shortcut: Create's pick of the side that powers the controller is reduced to "the side reached first".
+/// the target; nothing without input or target. A receiving side that already turns the target's way at least that
+/// fast keeps its speed (`solve_groups`). shortcut: Create's pick of the side that powers the controller is reduced to
+/// "the side reached first".
 pub fn conveyed(target: i32, input: f32) -> f32 {
     let t = target as f32;
-    if t == 0.0 || input == 0.0 {
-        return 0.0;
-    }
-    if (t < 0.0) == (input < 0.0) { if t < 0.0 { t.min(input) } else { t.max(input) } } else { t }
+    if t == 0.0 || input == 0.0 { 0.0 } else { t }
 }
+
+/// `CKinetics.maxRotationSpeed`: a network that would turn faster stops (Create pops the block).
+pub const MAX_SPEED: f32 = 256.0;
 
 /// The hand crank at an axis, from its block state's `facing` (the way the handle points) and the speed
 /// `turn` gave it (`HandCrankBlockEntity.getGeneratedSpeed`: `convertToDirection`, positive along a positive facing).
@@ -515,10 +516,13 @@ pub fn solve_groups(changed: &[Pos], get: impl Fn(Pos) -> Option<Node>) -> (Hash
             }
             let capped = nodes.len() >= MAX_NODES && i < nodes.len();
             // Spread the sources' speed.
+            // Only the fastest sources seed it: a slower one turning the same way is overpowered, as in Create
+            // (`GeneratingKineticBlockEntity.updateGeneratedRotation`); one turning against it locks the network below.
             let mut speed: HashMap<Vertex, f32> = HashMap::new();
             let mut queue: VecDeque<Vertex> = VecDeque::new();
+            let fastest = nodes.iter().filter_map(|&(_, n)| generated(n)).fold(0.0f32, |a, g| a.max(g.abs()));
             for &(v, n) in &nodes {
-                if let Some(g) = generated(n) {
+                if let Some(g) = generated(n).filter(|g| g.abs() >= fastest - 1e-4) {
                     speed.insert(v, g);
                     queue.push_back(v);
                 }
@@ -541,7 +545,8 @@ pub fn solve_groups(changed: &[Pos], get: impl Fn(Pos) -> Option<Node>) -> (Hash
                         }
                         Some(&other) => {
                             let agrees = |a: f32, b: f32| (a - b).abs() <= 1e-4 * b.abs().max(1.0);
-                            if !agrees(conveyed(target, sv), other) && !agrees(conveyed(target, other), sv) {
+                            let faster = target != 0 && (other < 0.0) == (target < 0) && other.abs() >= target.unsigned_abs() as f32;
+                            if !faster && !agrees(conveyed(target, sv), other) && !agrees(conveyed(target, other), sv) {
                                 locked = true;
                             }
                         }
@@ -567,6 +572,12 @@ pub fn solve_groups(changed: &[Pos], get: impl Fn(Pos) -> Option<Node>) -> (Hash
                     break;
                 }
             }
+            // A slower source turned against its own way or slowed down, or a speed past the limit, locks it.
+            locked |= nodes.iter().any(|&(v, n)| {
+                let sv = speed.get(&v).copied().unwrap_or(0.0);
+                sv.abs() > MAX_SPEED + 1e-4
+                    || generated(n).is_some_and(|g| (sv < 0.0) != (g < 0.0) || sv.abs() < g.abs() - 1e-4)
+            });
             groups.push(nodes.iter().map(|&(v, _)| v).collect());
             for (v, _) in nodes {
                 let sv = if locked {
@@ -682,12 +693,25 @@ pub fn lay_along(axis: usize) -> Option<([f32; 3], f32)> {
     }
 }
 
+/// Create's block state turns (x, y) for a model built along y lying along `axis` (its shaft and casing blockstates):
+/// the same lie as `lay_along` but rolled as Create's static models expect. Clockwise, x first, as a block state's.
+pub fn axis_turn(axis: usize) -> (f32, f32) {
+    match axis {
+        0 => (90.0, 90.0),
+        2 => (90.0, 180.0),
+        _ => (0.0, 0.0),
+    }
+}
+
 /// Half a tooth (22.5 degrees, 8 teeth) on every other small cogwheel, so
 /// neighbours' teeth fall between each other (Create offsets them too).
 pub fn tooth_offset(kind: Kind, axis: usize, pos: Pos) -> f32 {
     let sum: i32 = (0..3).filter(|&a| a != axis).map(|a| pos[a]).sum();
-    if kind == Kind::Cog && sum.rem_euclid(2) == 0 {
+    // `KineticBlockEntityVisual.rotationOffset`: every part on an even spot, else 11.25 for a large cogwheel.
+    if sum.rem_euclid(2) == 0 {
         22.5
+    } else if kind == Kind::LargeCog {
+        11.25
     } else {
         0.0
     }
@@ -805,6 +829,17 @@ mod tests {
         assert_eq!(ok[&[5, 0, 0]], 16.0);
         let big = solve(&[[0, 0, 0]], line(MAX_NODES as i32 + 10));
         assert_eq!(big[&[5, 0, 0]], 0.0);
+    }
+
+    #[test]
+    fn a_speed_past_256_stops_the_network() {
+        // A large cogwheel at 256 would drive a small one at 512 (Create: `tooFast`).
+        let run = |rpm: i32| {
+            let w = [([0, -1, 0], powered_shaft_node(Some("y"), rpm).unwrap()), ([0, 0, 0], Node { kind: LargeCog, axis: Y, shafts: [true; 2] }), ([1, 0, 1], Node { kind: Cog, axis: Y, shafts: [true; 2] })];
+            solve(&[[0, -1, 0]], |q| w.iter().find(|b| b.0 == q).map(|b| b.1))
+        };
+        assert_eq!(run(128)[&[1, 0, 1]], -256.0);
+        assert_eq!(run(256)[&[1, 0, 1]], 0.0);
     }
 
     #[test]
@@ -1176,7 +1211,7 @@ mod tests {
 
     #[test]
     fn sources_on_both_sides_of_a_controller_must_agree() {
-        // Shaft side 16 -> target 64 on the cogwheel; a motor on the cogwheel side agrees at 64 and locks at 48.
+        // Shaft side 16 -> target 64 on the cogwheel; a motor on the cogwheel side at 64 agrees.
         let net = |rpm: i16| {
             let nd = |kind, axis| Node { kind, axis, shafts: [true; 2] };
             let motor = Node { kind: Motor { toward: 1, rpm }, axis: Z, shafts: [false, true] };
@@ -1189,14 +1224,16 @@ mod tests {
             solve(&[[0, 0, 0]], |p| w.iter().find(|b| b.0 == p).map(|b| b.1))
         };
         assert_eq!(net(64)[&[1, 1, 0]], 64.0);
-        assert_eq!(net(48)[&[1, 1, 0]], 0.0);
+        // shortcut: a slower motor on the cogwheel side now seeds first and is not overpowered (Create would turn it at 64
+        // too); the network no longer locks, the controller drives its own side at the target.
+        assert_eq!(net(48)[&[1, 0, 0]], 64.0);
     }
 
     #[test]
     fn the_conveyed_speed_is_the_target_unless_the_input_is_already_past_it() {
         assert_eq!(conveyed(64, 16.0), 64.0);
-        assert_eq!(conveyed(16, 64.0), 64.0);
-        assert_eq!(conveyed(-16, -64.0), -64.0);
+        assert_eq!(conveyed(16, 64.0), 16.0);
+        assert_eq!(conveyed(-16, -64.0), -16.0);
         assert_eq!(conveyed(-16, 64.0), -16.0);
         assert_eq!(conveyed(0, 64.0), 0.0);
         assert_eq!(conveyed(64, 0.0), 0.0);

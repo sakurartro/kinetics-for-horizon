@@ -26,15 +26,15 @@ fn kinetics_submit(
         let centre = [0.5; 3];
         let around = [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
         draw.light = k::part_light(around.map(|d| game.native_light([pos[0] + d[0], pos[1] + d[1], pos[2] + d[2]])));
-        // Create's body over our placeholder, a hair larger so it covers it; laid along the axis like the casing's.
+        // Create's body over our placeholder, a hair larger so it covers it; turned as Create's block state turns it.
         if let Some(model) = c::static_look(block, game.native_block_state_property(state, "powered") == Some("true")) {
             draw.push();
             draw.translate(centre);
             draw.scale([1.001; 3]);
             draw.translate([-0.5; 3]);
-            if let Some((turn, degrees)) = k::lay_along(axis) {
-                draw.rotate_about(turn, degrees, centre);
-            }
+            let (x, y) = k::axis_turn(axis);
+            draw.rotate_about([0.0, 1.0, 0.0], -y, centre);
+            draw.rotate_about([1.0, 0.0, 0.0], -x, centre);
             game.native_draw_model(draw, model, 0xFF_FFFF);
             draw.pop();
         }
@@ -87,4 +87,19 @@ fn kinetics_submit(
         game.native_draw_model(draw, model, 0xFF_FFFF);
     }
     draw.pop();
+    // A speed controller under a large cogwheel on a horizontal axis: Create's bracket around the cogwheel's foot
+    // (SpeedControllerRenderer), in the block above, half a turn about y along x, a quarter along z.
+    let above = [pos[0], pos[1] + 1, pos[2]];
+    if matches!(kind, k::Kind::Controller { .. })
+        && game.native_block(above) == "kinetics:large_cogwheel"
+        && game.native_block_property(above, "axis").as_deref().is_some_and(|a| a != "y")
+    {
+        draw.light = k::part_light([game.native_light(above)]);
+        draw.push();
+        draw.translate([0.0, 1.0, 0.0]);
+        draw.rotate_about([0.0, 1.0, 0.0], if axis == 0 { 180.0 } else { 90.0 }, centre);
+        // Registered in models.rs.
+        game.native_draw_model(draw, "create:block/rotation_speed_controller/bracket", 0xFF_FFFF);
+        draw.pop();
+    }
 }

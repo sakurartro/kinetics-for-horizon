@@ -24,12 +24,13 @@ fn kinetics_chain_submit(
     let centre = [0.5; 3];
     if let Some((model, x, y)) = c::static_look(block, shape, prop("powered") == Some("true")) {
         draw.push();
-        // A hair larger than the block, so it covers our placeholder under it; the block state's turns, x first.
+        // A hair larger than the block, so it covers our placeholder under it; the block state's (clockwise) turns,
+        // x first: the later turn applies first.
         draw.translate(centre);
         draw.scale([1.001; 3]);
         draw.translate([-0.5; 3]);
-        draw.rotate_about([0.0, 1.0, 0.0], y as f32, centre);
-        draw.rotate_about([1.0, 0.0, 0.0], x as f32, centre);
+        draw.rotate_about([0.0, 1.0, 0.0], -(y as f32), centre);
+        draw.rotate_about([1.0, 0.0, 0.0], -(x as f32), centre);
         game.native_draw_model(draw, &model, 0xFF_FFFF);
         draw.pop();
     }

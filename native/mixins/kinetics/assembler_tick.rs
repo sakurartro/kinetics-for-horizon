@@ -10,6 +10,13 @@ fn kinetics_assembler_tick(game: &mut crate::game::Game<'_>, pos: [i32; 3], enti
     if &*entity.id != c::ASSEMBLER || !game.native_authoritative() {
         return;
     }
+    // Create's assembler is straight only (`RAIL_SHAPE`: north_south, east_west). shortcut: the powered rail template's
+    // shape can't be narrowed, so a slope the rail logic gives it is undone here at its next tick.
+    let shape = game.native_block_property(pos, "shape").unwrap_or_default();
+    if let Some(axis) = shape.strip_prefix("ascending_") {
+        let straight = if matches!(axis, "east" | "west") { "east_west" } else { "north_south" };
+        game.native_set_block_property_with(pos, "shape", straight, 3);
+    }
     let since = match entity.nbt.get(&JavaString::from(c::SINCE_KEY)) {
         Some(Tag::Int(v)) => *v,
         _ => c::ASSEMBLER_COOLDOWN,

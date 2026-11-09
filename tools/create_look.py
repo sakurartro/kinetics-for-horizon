@@ -33,10 +33,12 @@ MODELS = ["shaft", "cogwheel", "large_cogwheel"]
 MODELS += ["cogwheel_shaftless", "large_cogwheel_shaftless", "shaft_half", "andesite_casing", "encased_shaft/block_andesite"]
 MODELS += [f"andesite_encased_{big}cogwheel{ends}" for big in ("", "large_")
            for ends in ("", "_top", "_bottom", "_top_bottom")]
-MODELS += ["hand_crank/handle"]  # crank.rs LOOK_MODELS (its shaft_half is the casing's)
+MODELS += ["hand_crank/block", "hand_crank/handle"]  # crank.rs LOOK_MODELS
 # The cuckoo clocks (clock.rs LOOK_MODELS).
 MODELS += [f"cuckoo_clock/{m}" for m in ("block", "hour_hand", "minute_hand", "left_door", "right_door", "pig", "creeper")]
 MODELS += ["mechanical_drill/block", "mechanical_drill/head"]  # drill.rs LOOK_MODELS (body built up, head south)
+MODELS += ["bearing/top"]  # bearing_submit.rs (its half shaft is the casing's)
+MODELS += ["rotation_speed_controller/bracket"]  # submit.rs, under a large cogwheel
 MODELS += ["water_wheel/block"]  # water_wheel.rs LOOK_FRAME (the wheels themselves are OBJ models, which the game does not draw)
 # The gearbox's and the split blocks' static models (gearbox.rs STATIC_LOOK, clutch.rs STATIC_LOOK_MODELS).
 MODELS += ["gearbox/block", "clutch/block", "clutch/block_powered", "gearshift/block", "gearshift/block_powered"]
@@ -207,9 +209,87 @@ def main():
         if f"assets/create/textures/{path}.png" not in names:
             print(f"warning: {a.jar.name} has no texture {name}", file=sys.stderr)
 
+    def particle(name):
+        """The particle texture of Create's model `name`, looked up its parents, pulled into the pack."""
+        textures, parent = {}, name
+        while parent and ref(parent)[0] == "create":
+            m = json.loads(jar.read(f"assets/create/models/{ref(parent)[1]}.json"))
+            textures = {**m.get("textures", {}), **textures}
+            parent = m.get("parent")
+        tex = textures.get("particle")
+        while tex and tex.startswith("#"):
+            tex = textures.get(tex[1:])
+        if not tex:
+            sys.exit(f"{a.jar.name}: {name} has no particle texture: another Create version?")
+        texture(tex)
+        return tex
+
+    def blockstate(block):
+        return json.loads(jar.read(f"assets/create/blockstates/{block}.json"))
+
+    def matched(block, fixed=()):
+        """Kinetics' variants of `block` with Create's model and turns where Create has the same state (the Create
+        properties Kinetics lacks taken from `fixed`), Kinetics' placeholder where Create has none."""
+        props = lambda key: dict(p.split("=") for p in key.split(",") if p)
+        ours = json.loads((a.content / f"assets/kinetics/blockstates/{block}.json").read_bytes())["variants"]
+        theirs = [(props(k), v) for k, v in blockstate(block)["variants"].items()]
+        out = {}
+        for key, v in ours.items():
+            want = {**dict(fixed), **props(key)}
+            out[key] = next((c for p, c in theirs if p == want), v)
+            if out[key] is not v:
+                model(out[key]["model"])
+        return {"variants": out}
+
     all_models = MODELS + ["creative_motor/block", "creative_motor/block_vertical"]
     for name in all_models:
         model(f"create:block/{name}")
+    # The piston's models for its blockstate (the piston's own code and blockstate are on their way).
+    for v in blockstate("mechanical_piston")["variants"].values():
+        model(v["model"])
+
+    # The local .hmod's own Kinetics files, laid over Kinetics' (the pack can't replace a mod's files).
+    local = {}
+    # Blocks no native code draws Create's look over: Create's blockstates, on Kinetics' state properties.
+    local_states = {
+        "rotation_speed_controller": matched("rotation_speed_controller"),
+        "mechanical_bearing": matched("mechanical_bearing"),
+        # Create's rail types but the powered rail, and its ascending shapes, aren't Kinetics': those keep theirs.
+        "cart_assembler": matched("cart_assembler", {"rail_type": "powered_rail", "waterlogged": "false"}),
+        "metal_girder_encased_shaft": blockstate("metal_girder_encased_shaft"),  # the same axis, top and bottom
+        # Kinetics' pole is a chain, on an axis: Create's facings up, south and east.
+        "piston_extension_pole": {"variants": {
+            "axis=y": {"model": "create:block/piston_extension_pole"},
+            "axis=z": {"model": "create:block/piston_extension_pole", "x": 90},
+            "axis=x": {"model": "create:block/piston_extension_pole", "x": 90, "y": 90}}},
+        # Kinetics' girder has one `beam` (none, x, z, xz) for Create's `x` and `z`.
+        "metal_girder": {"multipart": [
+            {"when": {"beam": "none"}, "apply": {"model": "create:block/metal_girder/block_pole"}},
+            {"when": {"beam": "x|xz"}, "apply": {"model": "create:block/metal_girder/block_x"}},
+            {"when": {"beam": "z|xz"}, "apply": {"model": "create:block/metal_girder/block_z"}},
+            {"when": {"beam": "x|z", "top": "true"}, "apply": {"model": "create:block/metal_girder/block_top"}},
+            {"when": {"beam": "x|z", "bottom": "true"}, "apply": {"model": "create:block/metal_girder/block_bottom"}},
+            {"when": {"beam": "xz"}, "apply": {"model": "create:block/metal_girder/block_cross"}}]},
+    }
+    for block, state in local_states.items():
+        for part in state.get("multipart", []):
+            model(part["apply"]["model"])
+        local[f"assets/kinetics/blockstates/{block}.json"] = json.dumps(state, indent=2).encode()
+    # Placeholders native code draws Create's model over (or in place of): only their break particles, Create's.
+    # The cased shafts' and chain drives' walls showed through Create's recessed cores.
+    placeholders = {
+        "shaft_block": "shaft", "cogwheel_block": "cogwheel", "large_cogwheel_block": "large_cogwheel",
+        "crank_block": "hand_crank/block", "clock_block": "cuckoo_clock/block", "drill_block": "mechanical_drill/block",
+        "motor_block": "creative_motor/block", "flywheel_block": "flywheel/block",
+        "andesite_encased_shaft_block": "encased_shaft/block_andesite",
+        "brass_encased_shaft_block": "encased_shaft/block_brass",
+        "chain_drive_block": "encased_chain_drive/single",
+        "adjustable_chain_gearshift_block": "adjustable_chain_gearshift_single",
+        "adjustable_chain_gearshift_powered_block": "adjustable_chain_gearshift_single_powered",
+    }
+    for ours, theirs in placeholders.items():
+        local[f"assets/kinetics/models/block/{ours}.json"] = json.dumps(
+            {"textures": {"particle": particle(f"create:block/{theirs}")}}).encode()
     items = item_names(a.content)
     if not (a.content / "assets/kinetics/items").is_dir():
         sys.exit(f"{a.content}: missing Kinetics item definitions; pass --content with the content-mod folder")
@@ -223,6 +303,11 @@ def main():
             print(f"warning: Create item model for kinetics:{item_name} uses an unsupported loader; keeping its Kinetics icon", file=sys.stderr)
             continue
         create_items.append(item_name)
+    if "wrench" in create_items:
+        # Create's wrench is its handle and its gear (WrenchItemRenderer turns the gear; here it stands still).
+        model("create:item/wrench/gear")
+        local["assets/kinetics/items/wrench.json"] = json.dumps({"model": {"type": "minecraft:composite", "models": [
+            {"type": "minecraft:model", "model": f"create:item/wrench/{m}"} for m in ("item", "gear")]}}, indent=2).encode()
     files["pack.mcmeta"] = json.dumps({"pack": {
         "description": "Kinetics with Create's look (from your own Create jar; don't share)",
         "min_format": PACK_FORMAT, "max_format": PACK_FORMAT}}, indent=2).encode()
@@ -234,7 +319,7 @@ def main():
     replaced = build_local_mod(
         a.content,
         a.mod_out,
-        {p: b for p, b in files.items() if p.startswith("assets/")},
+        {**{p: b for p, b in files.items() if p.startswith("assets/")}, **local},
         create_items,
     )
     print(f"{a.out}: {len(files)} files. Turn it on in Options > Resource Packs for the world look.")

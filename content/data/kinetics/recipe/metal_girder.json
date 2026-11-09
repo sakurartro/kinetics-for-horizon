@@ -1,7 +1,16 @@
 {
   "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "key": { "P": "minecraft:iron_ingot", "C": "minecraft:andesite" },
-  "pattern": ["PPP", "CCC"],
-  "result": { "id": "kinetics:metal_girder", "count": 8 }
+  "key": {
+    "P": "minecraft:iron_ingot",
+    "C": "kinetics:andesite_alloy"
+  },
+  "pattern": [
+    "PPP",
+    "CCC"
+  ],
+  "result": {
+    "id": "kinetics:metal_girder",
+    "count": 8
+  }
 }

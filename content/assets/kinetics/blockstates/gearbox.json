@@ -2,6 +2,6 @@
   "variants": {
     "axis=x": { "model": "kinetics:block/gearbox_block", "x": 90, "y": 90 },
     "axis=y": { "model": "kinetics:block/gearbox_block" },
-    "axis=z": { "model": "kinetics:block/gearbox_block", "x": 90 }
+    "axis=z": { "model": "kinetics:block/gearbox_block", "x": 90, "y": 180 }
   }
 }

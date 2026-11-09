@@ -1,1 +1,9 @@
-{ "template": "minecraft:spruce_planks", "item": true }
+{
+  "template": "minecraft:spruce_planks",
+  "item": true,
+  "properties": {
+    "hardness": 1.5,
+    "explosion_resistance": 6.0,
+    "sounds": "minecraft:oak_planks"
+  }
+}

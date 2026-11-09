@@ -3,7 +3,7 @@
   "category": "misc",
   "ingredients": [
     "#minecraft:logs",
-    "minecraft:andesite"
+    "kinetics:andesite_alloy"
   ],
   "result": {
     "id": "kinetics:andesite_casing",

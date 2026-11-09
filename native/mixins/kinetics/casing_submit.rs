@@ -33,11 +33,13 @@ fn kinetics_casing_submit(
     };
     if let Some(model) = c::static_look(block, bottom, top) {
         draw.push();
-        // A hair larger than the block, so it covers our placeholder under it.
+        // A hair larger than the block, so it covers our placeholder under it; turned as Create's block state turns it.
         draw.translate(centre);
         draw.scale([1.001; 3]);
         draw.translate([-0.5; 3]);
-        turn(draw, 0.0);
+        let (x, y) = k::axis_turn(axis.unwrap_or(1));
+        draw.rotate_about([0.0, 1.0, 0.0], -y, centre);
+        draw.rotate_about([1.0, 0.0, 0.0], -x, centre);
         game.native_draw_model(draw, model, 0xFF_FFFF);
         draw.pop();
     }

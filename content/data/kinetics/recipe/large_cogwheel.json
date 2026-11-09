@@ -2,7 +2,8 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
-    "kinetics:cogwheel",
+    "kinetics:shaft",
+    "#minecraft:planks",
     "#minecraft:planks"
   ],
   "result": {

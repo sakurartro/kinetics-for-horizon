@@ -44,7 +44,13 @@ pub fn clamp(rpm: i32) -> i32 {
 
 /// The setting after `steps` wheel steps (positive: up), `big` for Shift.
 pub fn scrolled(rpm: i32, steps: i32, big: bool) -> i32 {
-    clamp(rpm.saturating_add(steps.saturating_mul(if big { BIG_STEP } else { STEP })))
+    past_zero(clamp(rpm.saturating_add(steps.saturating_mul(if big { BIG_STEP } else { STEP }))), steps)
+}
+
+/// Create's setting is never 0 (`KineticScrollValueBehaviour.setValueSettings`: at least 1): a step onto 0 goes on to
+/// 1 the same way.
+fn past_zero(rpm: i32, step: i32) -> i32 {
+    if rpm == 0 { step.signum() } else { rpm }
 }
 
 /// The speed the motor gives along the positive end of its axis: Create's `convertToDirection`, which turns the
@@ -67,7 +73,7 @@ pub enum Op {
 
 pub fn apply(rpm: i32, op: Op) -> i32 {
     match op {
-        Op::Add(change) => clamp(rpm.saturating_add(change)),
+        Op::Add(change) => past_zero(clamp(rpm.saturating_add(change)), change),
         Op::Reverse => -clamp(rpm),
     }
 }
@@ -257,6 +263,8 @@ mod tests {
         assert_eq!(scrolled(-250, -1, true), -256);
         assert_eq!(scrolled(16, 3, false), 19);
         assert_eq!(scrolled(1, -2, false), -1);
+        assert_eq!(scrolled(1, -1, false), -1);
+        assert_eq!(scrolled(-1, 1, false), 1);
         assert_eq!(scrolled(i32::MAX, i32::MAX, true), 256);
         assert_eq!(clamp(1000), 256);
     }

@@ -206,7 +206,9 @@ fn kinetics_settle(game: &mut crate::game::Game<'_>, dimension: &str) {
     }
     for pos in moved {
         game.native_block_entity_sync(pos);
-        if game.native_block(pos) == crate::game::kinetics_stressometer::BLOCK {
+        // Both gauges' comparators follow them (`GaugeBlockEntity.setChanged` -> `updateNeighbourForOutputSignal`).
+        let b = game.native_block(pos);
+        if b == crate::game::kinetics_stressometer::BLOCK || b == crate::game::kinetics_speedometer::BLOCK {
             game.native_update_output_neighbors(dimension, pos);
         }
     }

@@ -71,3 +71,20 @@ fn two_motors_facing_each_other_lock_the_network_unless_they_agree() {
     ];
     assert_eq!(run(w, [1, 0, 0])([1, 0, 0]), 16.0);
 }
+
+#[test]
+fn a_slower_source_turning_the_same_way_is_overpowered() {
+    // Create: the faster generator wins; only one turning the other way breaks the network.
+    let w = vec![
+        ([0, 0, 0], motor_node("east", 32).unwrap()),
+        ([1, 0, 0], shaft(0)),
+        ([2, 0, 0], motor_node("west", -16).unwrap()),
+    ];
+    assert_eq!(run(w, [1, 0, 0])([1, 0, 0]), 32.0);
+    let w = vec![
+        ([0, 0, 0], motor_node("east", 32).unwrap()),
+        ([1, 0, 0], shaft(0)),
+        ([2, 0, 0], motor_node("west", 16).unwrap()),
+    ];
+    assert_eq!(run(w, [1, 0, 0])([1, 0, 0]), 0.0);
+}

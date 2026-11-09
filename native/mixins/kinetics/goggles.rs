@@ -11,8 +11,7 @@
 // Stress lines: `KineticBlockEntity.addToTooltip` / `addToGoggleTooltip` / `addStressImpactStats` and
 // `GeneratingKineticBlockEntity.addToGoggleTooltip`, with the values of stress.rs.
 //
-// What differs from Create: lines under the crosshair like the creative motor's value box, not a tooltip box;
-// English only; a generator's speed is its block's speed.
+// What differs from Create: English only; a generator's speed is its block's speed; no fade-in or goggles icon.
 
 pub const GOGGLES: &str = "kinetics:goggles";
 
@@ -31,36 +30,53 @@ pub fn label(speed: f32) -> String {
 }
 
 const GOLD: u32 = 0xFFAA00;
+const WHITE: u32 = 0xFFFFFF;
 const GRAY: u32 = 0xAAAAAA;
+const DARK_GRAY: u32 = 0x555555;
 const AQUA: u32 = 0x55FFFF;
 
-fn su(value: f32) -> String {
-    format!("{} su", (value * 100.0).round() / 100.0)
+/// One line of coloured pieces (text, 0xRRGGBB).
+pub type Line = Vec<(String, u32)>;
+
+fn line(text: &str, rgb: u32) -> Line {
+    vec![(text.to_string(), rgb)]
 }
 
-/// The stress lines (text, RGB) for a block: its base `impact` and `capacity` (su per RPM, stress.rs), the speed
-/// the network `theoretical`ly gives it, and whether the network `overstressed` (stopped). Overstressed: Create's
-/// warning in place of the rest; else the impact of a block that has one and the capacity of a generator.
-pub fn stress_lines(overstressed: bool, impact: f32, capacity: f32, theoretical: f32) -> Vec<(String, u32)> {
-    let mut out: Vec<(String, u32)> = Vec::new();
-    if overstressed {
-        out.push(("Overstressed".into(), GOLD));
-        for l in ["It appears that this contraption is overstressed.", "Add more sources or slow down the", "components with a high stress impact."] {
-            out.push((l.into(), GRAY));
-        }
-        return out;
-    }
+/// `LangBuilder.forGoggles`: a header is indented by 4 spaces, a value line by 5.
+const H: &str = "    ";
+
+/// The stress lines for a block: its base `impact` and `capacity` (su per RPM, stress.rs) and the speed the network
+/// `theoretical`ly gives it, as Create's goggles show them (`addToGoggleTooltip`). `number` is
+/// `kinetics_stressometer::number` (`CreateLang.number`). Empty for a block with neither, as in Create.
+pub fn stress_lines(impact: f32, capacity: f32, theoretical: f32, number: fn(f32) -> String) -> Vec<Line> {
+    let mut out = Vec::new();
+    let value = |v: f32| vec![(format!("{H} {}su", number(v)), AQUA), (" at current speed".to_string(), DARK_GRAY)];
     if impact != 0.0 {
-        out.push(("Kinetic Stats:".into(), GRAY));
-        out.push(("Kinetic Stress Impact:".into(), GRAY));
-        out.push((format!(" {} at current speed", su(impact * theoretical.abs())), AQUA));
+        out.push(line(&format!("{H}Kinetic Stats:"), WHITE));
+        out.push(line(&format!("{H}Kinetic Stress Impact:"), GRAY));
+        out.push(value(impact * theoretical.abs()));
     }
     if capacity != 0.0 {
-        out.push(("Generator Stats:".into(), GRAY));
-        out.push(("Kinetic Stress Capacity:".into(), GRAY));
-        out.push((format!(" {} at current speed", su(capacity * theoretical.abs())), AQUA));
+        if !out.is_empty() {
+            out.push(Vec::new());
+        }
+        out.push(line(&format!("{H}Generator Stats:"), WHITE));
+        out.push(line(&format!("{H}Kinetic Stress Capacity:"), GRAY));
+        out.push(value(capacity * theoretical.abs()));
     }
     out
+}
+
+/// Create's overstressed warning (`KineticBlockEntity.addToTooltip`, key `gui.contraptions.network_overstressed`),
+/// shown with or without goggles: gold title, then gray text with the underscored words white.
+pub fn overstressed_lines() -> Vec<Line> {
+    let p = |t: &str, rgb| (t.to_string(), rgb);
+    vec![
+        line(&format!("{H}Overstressed"), GOLD),
+        vec![p(H, GRAY), p("It appears that this contraption is ", GRAY), p("overstressed", WHITE), p(".", GRAY)],
+        vec![p(H, GRAY), p("Add more sources or ", GRAY), p("slow down", WHITE), p(" the", GRAY)],
+        vec![p(H, GRAY), p("components with a high ", GRAY), p("stress impact", WHITE), p(".", GRAY)],
+    ]
 }
 
 #[cfg(test)]
@@ -84,11 +100,14 @@ mod tests {
 
     #[test]
     fn stress_lines_follow_create() {
-        assert!(stress_lines(false, 0.0, 0.0, 16.0).is_empty());
-        let l = stress_lines(false, 4.0, 0.0, -16.0);
-        assert_eq!(l[2].0, " 64 su at current speed");
-        let g = stress_lines(false, 0.0, 8.0, 16.0);
-        assert_eq!((g[0].0.as_str(), g[2].0.as_str()), ("Generator Stats:", " 128 su at current speed"));
-        assert_eq!(stress_lines(true, 4.0, 8.0, 16.0)[0].0, "Overstressed");
+        let n: fn(f32) -> String = |v| format!("{v}");
+        let text = |l: &Line| l.iter().map(|p| p.0.as_str()).collect::<String>();
+        assert!(stress_lines(0.0, 0.0, 16.0, n).is_empty());
+        let l = stress_lines(4.0, 0.0, -16.0, n);
+        assert_eq!(text(&l[2]), "     64su at current speed");
+        assert_eq!((l[0][0].1, l[2][0].1, l[2][1].1), (WHITE, AQUA, DARK_GRAY));
+        let g = stress_lines(0.0, 8.0, 16.0, n);
+        assert_eq!((text(&g[0]).as_str(), text(&g[2]).as_str()), ("    Generator Stats:", "     128su at current speed"));
+        assert_eq!(text(&overstressed_lines()[1]), "    It appears that this contraption is overstressed.");
     }
 }

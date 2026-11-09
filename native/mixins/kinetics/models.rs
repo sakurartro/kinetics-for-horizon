@@ -8,4 +8,6 @@ fn kinetics_models(models: &mut Vec<String>) {
     // The clutch's half shaft is ours: Create's `shaft_half` (its look) is the casing's, registered above.
     models.push(crate::game::kinetics_clutch::HALF_MODEL.to_string());
     models.extend(crate::game::kinetics_clutch::STATIC_LOOK_MODELS.iter().map(|m| m.to_string()));
+    // The bearing's top (bearing_submit.rs); its half shaft is the casing's, registered above.
+    models.push("create:block/bearing/top".to_string());
 }

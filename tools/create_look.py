@@ -37,6 +37,7 @@ MODELS += ["hand_crank/block", "hand_crank/handle"]  # crank.rs LOOK_MODELS
 # The cuckoo clocks (clock.rs LOOK_MODELS).
 MODELS += [f"cuckoo_clock/{m}" for m in ("block", "hour_hand", "minute_hand", "left_door", "right_door", "pig", "creeper")]
 MODELS += ["mechanical_drill/block", "mechanical_drill/head"]  # drill.rs LOOK_MODELS (body built up, head south)
+MODELS += ["bearing/top"]  # bearing_submit.rs (its half shaft is the casing's)
 MODELS += ["water_wheel/block"]  # water_wheel.rs LOOK_FRAME (the wheels themselves are OBJ models, which the game does not draw)
 # The gearbox's and the split blocks' static models (gearbox.rs STATIC_LOOK, clutch.rs STATIC_LOOK_MODELS).
 MODELS += ["gearbox/block", "clutch/block", "clutch/block_powered", "gearshift/block", "gearshift/block_powered"]

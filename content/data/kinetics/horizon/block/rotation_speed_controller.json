@@ -1,8 +1,18 @@
 {
   "template": "minecraft:glass",
-  "properties": { "hardness": 2.0, "explosion_resistance": 6.0, "sounds": "minecraft:stone" },
+  "properties": {
+    "hardness": 3.0,
+    "explosion_resistance": 6.0,
+    "sounds": "minecraft:gold_block"
+  },
   "state_properties": {
-    "axis": { "type": "enum", "values": ["x", "z"] }
+    "axis": {
+      "type": "enum",
+      "values": [
+        "x",
+        "z"
+      ]
+    }
   },
   "item": true
 }

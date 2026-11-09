@@ -2,7 +2,7 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "A": "minecraft:andesite",
+    "A": "kinetics:andesite_alloy",
     "I": "minecraft:iron_ingot",
     "C": "kinetics:andesite_casing"
   },

@@ -1,7 +1,17 @@
 {
   "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "key": { "A": "kinetics:shaft", "C": "minecraft:copper_ingot" },
-  "pattern": ["CCC", "CAC", "CCC"],
-  "result": { "id": "kinetics:flywheel", "count": 1 }
+  "key": {
+    "A": "kinetics:shaft",
+    "C": "minecraft:gold_ingot"
+  },
+  "pattern": [
+    "CCC",
+    "CAC",
+    "CCC"
+  ],
+  "result": {
+    "id": "kinetics:flywheel",
+    "count": 1
+  }
 }

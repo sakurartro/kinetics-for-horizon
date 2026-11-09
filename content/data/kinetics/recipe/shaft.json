@@ -2,15 +2,14 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "A": "minecraft:andesite",
-    "S": "minecraft:stick"
+    "A": "kinetics:andesite_alloy"
   },
   "pattern": [
     "A",
-    "S"
+    "A"
   ],
   "result": {
     "id": "kinetics:shaft",
-    "count": 4
+    "count": 8
   }
 }

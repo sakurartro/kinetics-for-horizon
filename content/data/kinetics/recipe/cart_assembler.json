@@ -2,12 +2,13 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "C": "kinetics:andesite_casing",
-    "R": "minecraft:rail"
+    "C": "kinetics:andesite_alloy",
+    "R": "minecraft:redstone",
+    "L": "#minecraft:logs"
   },
   "pattern": [
-    "C",
-    "R"
+    "CRC",
+    "L L"
   ],
   "result": {
     "id": "kinetics:cart_assembler",

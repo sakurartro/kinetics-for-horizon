@@ -2,7 +2,16 @@
   "template": "minecraft:stripped_oak_log",
   "item": false,
   "state_properties": {
-    "bottom_shaft": { "type": "boolean" },
-    "top_shaft": { "type": "boolean" }
+    "bottom_shaft": {
+      "type": "boolean"
+    },
+    "top_shaft": {
+      "type": "boolean"
+    }
+  },
+  "properties": {
+    "hardness": 1.5,
+    "explosion_resistance": 6.0,
+    "sounds": "minecraft:andesite"
   }
 }

@@ -1,6 +1,17 @@
 {
-  "type": "minecraft:crafting_shapeless",
+  "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "ingredients": ["minecraft:iron_nugget", "kinetics:shaft", "minecraft:andesite"],
-  "result": { "count": 4, "id": "kinetics:metal_bracket" }
+  "key": {
+    "S": "minecraft:iron_nugget",
+    "P": "minecraft:iron_ingot",
+    "C": "kinetics:andesite_alloy"
+  },
+  "pattern": [
+    "SSS",
+    "PCP"
+  ],
+  "result": {
+    "id": "kinetics:metal_bracket",
+    "count": 4
+  }
 }

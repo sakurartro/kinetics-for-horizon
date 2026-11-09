@@ -1,15 +1,17 @@
 {
   "type": "minecraft:crafting_shaped",
-  "category": "equipment",
+  "category": "misc",
   "key": {
-    "G": "minecraft:glass_pane",
-    "P": "minecraft:gold_ingot",
-    "S": "minecraft:string"
+    "S": "minecraft:string",
+    "G": "minecraft:glass",
+    "P": "minecraft:gold_ingot"
   },
   "pattern": [
-    "S S",
-    "GSG",
-    "P P"
+    " S ",
+    "GPG"
   ],
-  "result": { "count": 1, "id": "kinetics:goggles" }
+  "result": {
+    "id": "kinetics:goggles",
+    "count": 1
+  }
 }

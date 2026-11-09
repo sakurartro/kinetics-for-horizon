@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "#minecraft:logs",
+    "minecraft:copper_ingot"
+  ],
+  "result": {
+    "id": "kinetics:copper_casing",
+    "count": 1
+  }
+}

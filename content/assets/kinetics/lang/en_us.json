@@ -46,5 +46,6 @@
   "block.kinetics.cart_assembler": "Cart Assembler",
   "item.kinetics.minecart_contraption": "Minecart Contraption",
   "item.kinetics.furnace_minecart_contraption": "Furnace Minecart Contraption",
-  "item.kinetics.chest_minecart_contraption": "Chest Minecart Contraption"
+  "item.kinetics.chest_minecart_contraption": "Chest Minecart Contraption",
+  "item.kinetics.andesite_alloy": "Andesite Alloy"
 }

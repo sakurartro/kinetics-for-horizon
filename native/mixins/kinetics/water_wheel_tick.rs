@@ -18,12 +18,11 @@ fn kinetics_water_wheel_tick(game: &mut crate::game::Game<'_>, pos: [i32; 3], en
     else {
         return;
     };
-    // Each block is read once for this look.
-    let memo = std::cell::RefCell::new(std::collections::HashMap::new());
-    let get = |p: [i32; 3]| {
-        *memo.borrow_mut().entry(p).or_insert_with(|| w::classify(&game.native_block(p), |key| game.native_block_property(p, key)))
+    let current = |p: [i32; 3]| {
+        w::bubble_push(&game.native_block(p), game.native_block_property(p, "drag")).or_else(|| game.native_fluid_flow(dimension, p))
     };
-    let (score, _lava) = w::flow_score(&get, pos, axis, w::size(name));
+    // An unloaded chunk beside the wheel: keep the last score, and so the last speed.
+    let Some(score) = w::flow_score(&current, pos, axis, w::size(name)) else { return };
     let key = JavaString::from(w::FLOW_KEY);
     let old = match entity.nbt.get(&key) {
         Some(Tag::Int(v)) => *v,

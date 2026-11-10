@@ -3,7 +3,7 @@
 //
 // Ported from Create's `content/kinetics/waterwheel/` (WaterWheelBlockEntity.determineAndApplyFlowScore,
 // getFlowVectorAtPosition, getGeneratedSpeed, SMALL_OFFSETS / LARGE_OFFSETS; LargeWaterWheelBlock.tick and
-// getStateForPlacement; WaterWheelStructuralBlock.getMaster / stillValid) and vanilla's `FlowingFluid.getFlow`,
+// getStateForPlacement; WaterWheelStructuralBlock.getMaster / stillValid),
 // https://github.com/Creators-of-Create/Create, branch mc1.21.1/dev, commit 4148fd8.
 //
 // Copyright (c) The Create Team / The Creators of Create
@@ -69,42 +69,7 @@ pub fn axis_index(value: &str) -> Option<usize> {
     }
 }
 
-// ---- Fluids -------------------------------------------------------------------------------------------------
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Liquid {
-    Water,
-    Lava,
-}
-
-/// A `FluidState`: `amount` 1 to 8 (a source is 8), `falling` is the flowing fluid above another.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Fluid {
-    pub liquid: Liquid,
-    pub amount: u8,
-    pub falling: bool,
-}
-
-impl Fluid {
-    pub const fn source(liquid: Liquid) -> Self {
-        Fluid { liquid, amount: 8, falling: false }
-    }
-    /// `getOwnHeight`.
-    fn height(self) -> f64 {
-        f64::from(self.amount) / 9.0
-    }
-}
-
-/// What the wheel needs to know of one block.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Cell {
-    pub fluid: Option<Fluid>,
-    /// Stands in for `blocksMotion` / `isFaceSturdy`.
-    pub solid: bool,
-    /// A bubble column: `Some(true)` drags down.
-    pub drag: Option<bool>,
-    pub ice: bool,
-}
+// ---- Blocks -------------------------------------------------------------------------------------------------
 
 /// Whether a block can be built over (`canBeReplaced`): vanilla's air, fluids and plants. `layers` is a snow
 /// layer's height.
@@ -120,105 +85,19 @@ pub fn replaceable(name: &str, layers: Option<&str>) -> bool {
     }
 }
 
-/// The `Cell` of block `name`, `prop` reading its state's properties (`level`, `waterlogged`, `drag`, `layers`).
-pub fn classify(name: &str, prop: impl Fn(&str) -> Option<String>) -> Cell {
-    let level = |liquid| {
-        // `LiquidBlock.getFluidState`: level 0 a source, 1 to 7 flowing (amount 8 - level), 8 and up falling.
-        let l: u8 = prop("level").and_then(|v| v.parse().ok()).unwrap_or(0);
-        Some(match l {
-            0 => Fluid::source(liquid),
-            1..=7 => Fluid { liquid, amount: 8 - l, falling: false },
-            _ => Fluid { liquid, amount: 8, falling: true },
-        })
-    };
-    let (fluid, drag) = match name {
-        "minecraft:water" => (level(Liquid::Water), None),
-        "minecraft:lava" => (level(Liquid::Lava), None),
-        "minecraft:bubble_column" => (
-            Some(Fluid::source(Liquid::Water)),
-            Some(prop("drag").as_deref() == Some("true")),
-        ),
-        "minecraft:kelp" | "minecraft:kelp_plant" | "minecraft:seagrass" | "minecraft:tall_seagrass" => {
-            (Some(Fluid::source(Liquid::Water)), None)
-        }
-        _ if prop("waterlogged").as_deref() == Some("true") => (Some(Fluid::source(Liquid::Water)), None),
-        _ => (None, None),
-    };
-    Cell {
-        fluid,
-        solid: !replaceable(name, prop("layers").as_deref()),
-        drag,
-        ice: matches!(name, "minecraft:ice" | "minecraft:packed_ice" | "minecraft:blue_ice" | "minecraft:frosted_ice"),
-    }
-}
-
 fn add(a: Pos, b: Pos) -> Pos {
     [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 }
-
-const HORIZONTAL: [Pos; 4] = [[0, 0, -1], [1, 0, 0], [0, 0, 1], [-1, 0, 0]];
 
 fn normalize(v: [f64; 3]) -> [f64; 3] {
     let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
     if len < 1.0e-4 { [0.0; 3] } else { [v[0] / len, v[1] / len, v[2] / len] }
 }
 
-/// `FlowingFluid.getFlow` of the fluid at `pos`: the way it runs downhill, length 1 (or zero on the flat).
-pub fn flow(get: &impl Fn(Pos) -> Cell, pos: Pos) -> [f64; 3] {
-    let Some(own) = get(pos).fluid else { return [0.0; 3] };
-    let affects = |f: Option<Fluid>| f.is_none_or(|f| f.liquid == own.liquid);
-    let (mut x, mut z) = (0.0, 0.0);
-    for d in HORIZONTAL {
-        let p = add(pos, d);
-        let cell = get(p);
-        if !affects(cell.fluid) {
-            continue;
-        }
-        let mut f = cell.fluid.map_or(0.0, Fluid::height);
-        let mut g = 0.0;
-        if f == 0.0 {
-            if !cell.solid
-                && let Some(below) = get(add(p, [0, -1, 0])).fluid
-                && below.liquid == own.liquid
-            {
-                f = below.height();
-                if f > 0.0 {
-                    g = own.height() - (f - 0.888_888_9);
-                }
-            }
-        } else {
-            g = own.height() - f;
-        }
-        if g != 0.0 {
-            x += f64::from(d[0]) * g;
-            z += f64::from(d[2]) * g;
-        }
-    }
-    let mut v = [x, 0.0, z];
-    if own.falling {
-        // `isSolidFace`: not the same fluid, not ice, and a solid block.
-        let face = |p: Pos| {
-            let c = get(p);
-            c.fluid.is_none_or(|f| f.liquid != own.liquid) && !c.ice && c.solid
-        };
-        for d in HORIZONTAL {
-            let p = add(pos, d);
-            if face(p) || face(add(p, [0, 1, 0])) {
-                let n = normalize(v);
-                v = [n[0], n[1] - 6.0, n[2]];
-                break;
-            }
-        }
-    }
-    normalize(v)
-}
-
-/// `getFlowVectorAtPosition`: a bubble column pushes straight up or down.
-pub fn flow_at(get: &impl Fn(Pos) -> Cell, pos: Pos) -> [f64; 3] {
-    match get(pos).drag {
-        Some(down) => [0.0, if down { -1.0 } else { 1.0 }, 0.0],
-        None => flow(get, pos),
-    }
+/// `getFlowVectorAtPosition`'s bubble column: it pushes straight up or down. All other currents come from the
+/// game's `native_fluid_flow`.
+pub fn bubble_push(name: &str, drag: Option<String>) -> Option<[f64; 3]> {
+    (name == "minecraft:bubble_column").then(|| [0.0, if drag.as_deref() == Some("true") { -1.0 } else { 1.0 }, 0.0])
 }
 
 // ---- The flow score -----------------------------------------------------------------------------------------
@@ -258,16 +137,14 @@ fn quarter_turn(v: [f64; 3], axis: usize) -> [f64; 3] {
     }
 }
 
-/// `determineAndApplyFlowScore`: how many of the `offsets` push the wheel one way (+1) or the other (-1), and
-/// whether one of them is lava. `get` reads the world around `centre`.
-pub fn flow_score(get: &impl Fn(Pos) -> Cell, centre: Pos, axis: usize, size: i32) -> (i32, bool) {
+/// `determineAndApplyFlowScore`: how many of the `offsets` push the wheel one way (+1) or the other (-1). `current`
+/// is the flow at a position, none where it can't be read (an unloaded chunk): then there is no new score.
+pub fn flow_score(current: &impl Fn(Pos) -> Option<[f64; 3]>, centre: Pos, axis: usize, size: i32) -> Option<i32> {
     let mut plane = [1.0; 3];
     plane[axis] = 0.0;
-    let (mut score, mut lava) = (0, false);
+    let mut score = 0;
     for off in offsets(axis, size) {
-        let at = add(centre, off);
-        let f = flow_at(get, at);
-        lava |= get(at).fluid.is_some_and(|f| f.liquid == Liquid::Lava);
+        let f = current(add(centre, off))?;
         let f = [f[0] * plane[0], f[1] * plane[1], f[2] * plane[2]];
         if f == [0.0; 3] {
             continue;
@@ -280,7 +157,7 @@ pub fn flow_score(get: &impl Fn(Pos) -> Cell, centre: Pos, axis: usize, size: i3
             score += dot.signum() as i32;
         }
     }
-    (score, lava)
+    Some(score)
 }
 
 // ---- The large wheel's body ---------------------------------------------------------------------------------
@@ -474,87 +351,43 @@ pub fn take(dimension: &str) -> Vec<(Pos, Task)> {
 mod tests {
     use super::*;
 
-    /// A tiny world: `water` cells with their level, `solid` cells.
-    fn world(water: &[(Pos, &'static str)], solid: &[Pos]) -> impl Fn(Pos) -> Cell {
-        let water: Vec<_> = water.to_vec();
-        let solid: Vec<_> = solid.to_vec();
-        move |p| {
-            if let Some((_, level)) = water.iter().find(|(q, _)| *q == p) {
-                return classify("minecraft:water", |k| (k == "level").then(|| level.to_string()));
-            }
-            Cell { solid: solid.contains(&p), ..Cell::default() }
-        }
-    }
-
-    #[test]
-    fn levels_make_fluid_states() {
-        let c = |l: &'static str| classify("minecraft:water", |k| (k == "level").then(|| l.to_string())).fluid.unwrap();
-        assert_eq!(c("0"), Fluid::source(Liquid::Water));
-        assert_eq!((c("3").amount, c("3").falling), (5, false));
-        assert_eq!((c("9").amount, c("9").falling), (8, true));
-        let wl = classify("minecraft:oak_fence", |k| (k == "waterlogged").then(|| "true".to_string()));
-        assert_eq!(wl.fluid, Some(Fluid::source(Liquid::Water)));
-        assert!(wl.solid);
-    }
-
-    #[test]
-    fn water_runs_downhill_away_from_the_source() {
-        // A source at the origin with a flowing level-1 block east of it: the flow at the east block points east.
-        let w = world(&[([0, 0, 0], "0"), ([1, 0, 0], "1")], &[]);
-        let v = flow(&w, [1, 0, 0]);
-        // The source is higher on the west, so the lower block east of it is pulled east (+x).
-        assert!(v[0] > 0.99 && v[2].abs() < 1e-9, "{v:?}");
-        // A lone source is flat.
-        assert_eq!(flow(&world(&[([0, 0, 0], "0")], &[]), [0, 0, 0]), [0.0; 3]);
+    /// A world with a current `flows` at some positions and none elsewhere.
+    fn world(flows: &[(Pos, [f64; 3])]) -> impl Fn(Pos) -> Option<[f64; 3]> {
+        let flows = flows.to_vec();
+        move |p| Some(flows.iter().find(|(q, _)| *q == p).map_or([0.0; 3], |(_, f)| *f))
     }
 
     #[test]
     fn a_stream_going_one_way_turns_a_small_wheel_one_way() {
-        // Wheel at the origin on y; a flow running east on its north side (z = -1) and the same on its south side.
-        // Going round counter-clockwise seen from +y (VecHelper.rotate(normal, 90, y)): the north side must go west.
-        let on_north = world(&[([0, 0, -2], "0"), ([0, 0, -1], "1"), ([1, 0, -1], "2")], &[]);
-        let (score, lava) = flow_score(&on_north, [0, 0, 0], 1, 1);
-        assert!(!lava);
-        // Flow at (0,0,-1) runs +x (from the source side), normal = (0,0,-1), rotate 90 about y -> (-1,0,0): dot -1.
-        assert_eq!(score, -1);
-        // The same stream on the south side runs the other way round the wheel: the sign flips.
-        let on_south = world(&[([0, 0, 2], "0"), ([0, 0, 1], "1"), ([1, 0, 1], "2")], &[]);
-        assert_eq!(flow_score(&on_south, [0, 0, 0], 1, 1).0, 1);
+        // Wheel at the origin on y. Going round counter-clockwise seen from +y (VecHelper.rotate(normal, 90, y)):
+        // a current running east on the north side (z = -1) has normal (0,0,-1), rotated -> (-1,0,0): dot -1.
+        let east = [1.0, 0.0, 0.0];
+        assert_eq!(flow_score(&world(&[([0, 0, -1], east)]), [0, 0, 0], 1, 1), Some(-1));
+        // The same current on the south side runs the other way round the wheel: the sign flips.
+        assert_eq!(flow_score(&world(&[([0, 0, 1], east)]), [0, 0, 0], 1, 1), Some(1));
         // Both together cancel.
-        let both = |p| on_north(p).fluid.map_or_else(|| on_south(p), |_| on_north(p));
-        assert_eq!(flow_score(&both, [0, 0, 0], 1, 1).0, 0);
+        assert_eq!(flow_score(&world(&[([0, 0, -1], east), ([0, 0, 1], east)]), [0, 0, 0], 1, 1), Some(0));
+    }
+
+    #[test]
+    fn an_unreadable_neighbour_keeps_the_last_score() {
+        let gap = |p: Pos| (p != [0, 0, 1]).then_some([0.0; 3]);
+        assert_eq!(flow_score(&gap, [0, 0, 0], 1, 1), None);
     }
 
     #[test]
     fn a_bubble_column_pushes_straight_up_or_down() {
-        let col = |down: bool| move |p: Pos| {
-            if p == [1, 0, 0] {
-                classify("minecraft:bubble_column", |k| (k == "drag").then(|| down.to_string()))
-            } else {
-                Cell::default()
+        let col = |down: bool| {
+            move |p: Pos| {
+                Some(if p == [1, 0, 0] { bubble_push("minecraft:bubble_column", Some(down.to_string())).unwrap() } else { [0.0; 3] })
             }
         };
         // Wheel on z, column east of it: normal +x, rotate 90 about z -> +y, so an upward column scores +1.
-        assert_eq!(flow_score(&col(false), [0, 0, 0], 2, 1).0, 1);
-        assert_eq!(flow_score(&col(true), [0, 0, 0], 2, 1).0, -1);
+        assert_eq!(flow_score(&col(false), [0, 0, 0], 2, 1), Some(1));
+        assert_eq!(flow_score(&col(true), [0, 0, 0], 2, 1), Some(-1));
         // Wheel on y: the column's push is along the axis, which the plane removes.
-        assert_eq!(flow_score(&col(false), [0, 0, 0], 1, 1).0, 0);
-    }
-
-    #[test]
-    fn lava_counts_and_is_seen() {
-        let lava = |p: Pos| {
-            if p == [0, 0, -1] {
-                classify("minecraft:lava", |_| Some("0".to_string()))
-            } else if p == [1, 0, -1] {
-                classify("minecraft:lava", |_| Some("2".to_string()))
-            } else {
-                Cell::default()
-            }
-        };
-        let (score, is_lava) = flow_score(&lava, [0, 0, 0], 1, 1);
-        assert!(is_lava);
-        assert!(score.abs() <= 1);
+        assert_eq!(flow_score(&col(false), [0, 0, 0], 1, 1), Some(0));
+        assert_eq!(bubble_push("minecraft:water", None), None);
     }
 
     #[test]

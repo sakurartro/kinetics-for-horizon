@@ -7,7 +7,7 @@ priority = 100
 # standalone models (API 151), newer than the Nightly of 2026-11-01 (API 80).
 # The launcher downloads this commit's source and builds the game on it.
 [compatibility]
-horizon_revision = "c5c8a33a8a3ec0091060096bdbaab25770778eaf"
+horizon_revision = "1453e0e614af4b2d04dd0d228a94162b5d459910"
 
 [[module]]
 id = "runtime"

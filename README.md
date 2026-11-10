@@ -13,7 +13,7 @@ Rotation rules follow Create: speed travels along shafts, meshing cogwheels reve
 ## Requirements
 
 - Horizon with its launcher, on **Minecraft 26.3**.
-- The native part is pinned to Horizon commit `c5c8a33` (hook points API 153, needs 129 and 151). Older Nightlies, such as 2026-11-01 (API 80), won't work. If your Horizon differs, the launcher asks before building ("Build anyway").
+- The native part is pinned to Horizon commit `1453e0e` (hook points API 415, needs 129 and 151). Older Nightlies, such as 2026-11-01 (API 80), won't work. If your Horizon differs, the launcher asks before building ("Build anyway").
 - Rust is not needed to play; the launcher builds the game for you. The first build takes 20–30 minutes. Building the mod files yourself (below) does need Rust and `cargo-horizon-mod`.
 - **Tested only on Arch Linux** (Omarchy). Other distros, Windows and macOS are untested; the paths below for them come from reading the code, not from running it.
 - **Alpha:** A LOT OF BUGS

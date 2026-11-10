@@ -599,12 +599,13 @@ pub fn angle(rpm: f32, ticks: f64) -> f32 {
 }
 
 /// The phase `BlockEntityDraw::spin` needs for a part now turning `dpt` degrees a tick (angle = game time * dpt +
-/// phase), given the `(dpt, phase, offset)` it was last drawn with. A speed change between two turning speeds carries
-/// on from the angle the part had at `t` (a whole game tick, so a network changing in one tick keeps its parts
-/// meshing); from and to a standstill the part is at its `offset` (tooth offset), as everything at rest is.
+/// phase), given the `(dpt, phase, offset)` it was last drawn with. A new speed carries on from the angle the part
+/// had at `t` (a whole game tick, so a network changing in one tick keeps its parts meshing); a part drawn for the
+/// first time, or standing still, is at `offset` (tooth offset) as Create draws it, so cogs that never changed speed
+/// mesh by position alone.
 pub fn spin_phase(last: Option<(f32, f32, f32)>, dpt: f32, offset: f32, t: f64) -> f32 {
     match last {
-        Some((d, p, o)) if d != 0.0 && dpt != 0.0 && o == offset => {
+        Some((d, p, o)) if dpt != 0.0 && o == offset => {
             (t * (f64::from(d) - f64::from(dpt)) + f64::from(p)).rem_euclid(360.0) as f32
         }
         _ => offset,

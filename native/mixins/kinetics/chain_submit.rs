@@ -38,9 +38,9 @@ fn kinetics_chain_submit(
         Some(Tag::Float(bits)) => f32::from_bits(*bits),
         _ => 0.0,
     };
-    let angle = k::angle(speed, draw.game_time as f64 + f64::from(draw.partial));
+    let (dpt, phase) = k::spin_args(pos, 0, speed, 0.0, draw.game_time);
+    draw.spin(k::axis_vector(axis), centre, dpt, phase);
     draw.push();
-    draw.rotate_about(k::axis_vector(axis), angle, centre);
     if let Some((turn, degrees)) = k::lay_along(axis) {
         draw.rotate_about(turn, degrees, centre);
     }
@@ -49,4 +49,6 @@ fn kinetics_chain_submit(
         game.native_draw_model(draw, k::PART_MODELS[0], 0xFF_FFFF);
     }
     draw.pop();
+    draw.still();
+    draw.keep();
 }

@@ -24,7 +24,6 @@ fn kinetics_water_wheel_submit(
         Some(Tag::String(s)) => s.to_string_lossy(),
         _ => w::DEFAULT_MATERIAL.to_string(),
     };
-    let ticks = draw.game_time as f64 + f64::from(draw.partial);
     let centre = [0.5; 3];
     let around = [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
     draw.light = k::part_light(around.map(|d| game.native_light([pos[0] + d[0], pos[1] + d[1], pos[2] + d[2]])));
@@ -40,6 +39,8 @@ fn kinetics_water_wheel_submit(
         game.native_draw_model(draw, w::LOOK_FRAME, 0xFF_FFFF);
         draw.pop();
     }
+    let (dpt, phase) = k::spin_args(pos, 0, speed, 0.0, draw.game_time);
+    draw.spin(k::axis_vector(axis), centre, dpt, phase);
     draw.push();
     if large {
         // The large models are built at half size to fit the baker's -16..32 bounds: doubled here, about the centre.
@@ -47,10 +48,11 @@ fn kinetics_water_wheel_submit(
         draw.scale([2.0; 3]);
         draw.translate([-0.5; 3]);
     }
-    draw.rotate_about(k::axis_vector(axis), k::angle(speed, ticks), centre);
     if let Some((turn, degrees)) = k::lay_along(axis) {
         draw.rotate_about(turn, degrees, centre);
     }
     game.native_draw_model(draw, &w::model(large, &material), 0xFF_FFFF);
     draw.pop();
+    draw.still();
+    draw.keep();
 }

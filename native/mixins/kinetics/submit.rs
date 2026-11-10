@@ -1,6 +1,6 @@
-// Draws a shaft or cogwheel turned to its axis and by its speed.
-// shortcut: no draw.keep() for parts standing still: kept geometry follows the block's own light, not
-// the neighbours' we use; add it back if frames drop with many parts.
+// Draws a shaft or cogwheel turned to its axis and by its speed: drawn at rest, turned by `draw.spin`, and kept.
+// shortcut: kept geometry follows the block's own light (it is drawn again when that changes), not the neighbours'
+// we use; drop draw.keep() if lit-wrong parts show.
 fn kinetics_submit(
     game: &crate::game::Game<'_>,
     pos: [i32; 3],
@@ -22,7 +22,6 @@ fn kinetics_submit(
         let Some(axis) = game.native_block_state_property(state, "axis").and_then(k::axis_of) else {
             return;
         };
-        let ticks = draw.game_time as f64 + f64::from(draw.partial);
         let centre = [0.5; 3];
         let around = [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
         draw.light = k::part_light(around.map(|d| game.native_light([pos[0] + d[0], pos[1] + d[1], pos[2] + d[2]])));
@@ -44,11 +43,12 @@ fn kinetics_submit(
                 Some(Tag::Float(bits)) => f32::from_bits(*bits),
                 _ => 0.0,
             };
-            let angle = k::angle(speed, ticks);
+            let (dpt, phase) = k::spin_args(pos, half, speed, 0.0, draw.game_time);
+            draw.spin(k::axis_vector(axis), centre, dpt, phase);
             // Create's model first (only with the look pack on), ours the fallback.
             for (look, model) in [(true, c::LOOK_HALF_MODEL), (false, c::HALF_MODEL)] {
                 draw.push();
-                for (turn, degrees) in c::half_turns(axis, half == 1, look, angle) {
+                for (turn, degrees) in c::half_turns(axis, half == 1, look, 0.0) {
                     draw.rotate_about(turn, degrees, centre);
                 }
                 let drawn = game.native_draw_model(draw, model, 0xFF_FFFF);
@@ -57,7 +57,9 @@ fn kinetics_submit(
                     break;
                 }
             }
+            draw.still();
         }
+        draw.keep();
         return;
     }
     // The cased parts are drawn by casing_submit.rs.
@@ -72,13 +74,12 @@ fn kinetics_submit(
         Some(Tag::Float(bits)) => f32::from_bits(*bits),
         _ => 0.0,
     };
-    let ticks = draw.game_time as f64 + f64::from(draw.partial);
-    let angle = k::angle(speed, ticks) + k::tooth_offset(kind, axis, pos);
     let centre = [0.5; 3];
     let around = [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
     draw.light = k::part_light(around.map(|d| game.native_light([pos[0] + d[0], pos[1] + d[1], pos[2] + d[2]])));
+    let (dpt, phase) = k::spin_args(pos, 0, speed, k::tooth_offset(kind, axis, pos), draw.game_time);
+    draw.spin(k::axis_vector(axis), centre, dpt, phase);
     draw.push();
-    draw.rotate_about(k::axis_vector(axis), angle, centre);
     if let Some((turn, degrees)) = k::lay_along(axis) {
         draw.rotate_about(turn, degrees, centre);
     }
@@ -87,6 +88,7 @@ fn kinetics_submit(
         game.native_draw_model(draw, model, 0xFF_FFFF);
     }
     draw.pop();
+    draw.still();
     // A speed controller under a large cogwheel on a horizontal axis: Create's bracket around the cogwheel's foot
     // (SpeedControllerRenderer), in the block above, half a turn about y along x, a quarter along z.
     let above = [pos[0], pos[1] + 1, pos[2]];
@@ -101,5 +103,9 @@ fn kinetics_submit(
         // Registered in models.rs.
         game.native_draw_model(draw, "create:block/rotation_speed_controller/bracket", 0xFF_FFFF);
         draw.pop();
+    }
+    // Not kept: the controller's bracket reads the block above, the flywheel's wheel eases (flywheel_submit.rs).
+    if !matches!(kind, k::Kind::Controller { .. }) && block != crate::game::kinetics_flywheel::BLOCK {
+        draw.keep();
     }
 }

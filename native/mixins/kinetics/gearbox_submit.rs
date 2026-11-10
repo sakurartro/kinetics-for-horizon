@@ -21,7 +21,6 @@ fn kinetics_gearbox_submit(
         Some(Tag::Float(bits)) => f32::from_bits(*bits),
         _ => 0.0,
     };
-    let ticks = draw.game_time as f64 + f64::from(draw.partial);
     let centre = [0.5; 3];
     let around = [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
     draw.light = k::part_light(around.map(|d| game.native_light([pos[0] + d[0], pos[1] + d[1], pos[2] + d[2]])));
@@ -35,10 +34,10 @@ fn kinetics_gearbox_submit(
     draw.rotate_about([1.0, 0.0, 0.0], -x, centre);
     game.native_draw_model(draw, g::STATIC_LOOK, 0xFF_FFFF);
     draw.pop();
-    for (axis, positive) in g::faces(box_axis) {
-        let angle = k::angle(speed * k::gearbox_sign(box_axis, axis, positive), ticks);
+    for (face, (axis, positive)) in g::faces(box_axis).enumerate() {
+        let (dpt, phase) = k::spin_args(pos, face as u8, speed * k::gearbox_sign(box_axis, axis, positive), 0.0, draw.game_time);
+        draw.spin(k::axis_vector(axis), centre, dpt, phase);
         draw.push();
-        draw.rotate_about(k::axis_vector(axis), angle, centre);
         if let Some((turn, degrees)) = g::lay_face(axis, positive) {
             draw.rotate_about(turn, degrees, centre);
         }
@@ -46,5 +45,7 @@ fn kinetics_gearbox_submit(
             game.native_draw_model(draw, g::PART_MODELS[0], 0xFF_FFFF);
         }
         draw.pop();
+        draw.still();
     }
+    draw.keep();
 }

@@ -20,7 +20,6 @@ fn kinetics_motor_submit(
         Some(Tag::Float(bits)) => f32::from_bits(*bits),
         _ => 0.0,
     };
-    let angle = k::angle(speed, draw.game_time as f64 + f64::from(draw.partial));
     let centre = [0.5; 3];
     let around = [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
     draw.light = k::part_light(around.map(|d| game.native_light([pos[0] + d[0], pos[1] + d[1], pos[2] + d[2]])));
@@ -44,8 +43,9 @@ fn kinetics_motor_submit(
         draw.pop();
     }
     // The shaft: laid to the facing, then turned about its axis.
+    let (dpt, phase) = k::spin_args(pos, 0, speed, 0.0, draw.game_time);
+    draw.spin(k::axis_vector(m::axis(facing)), centre, dpt, phase);
     draw.push();
-    draw.rotate_about(k::axis_vector(m::axis(facing)), angle, centre);
     if let Some((turn, degrees)) = south {
         draw.rotate_about(turn, degrees, centre);
     }
@@ -53,4 +53,6 @@ fn kinetics_motor_submit(
         game.native_draw_model(draw, m::MODELS[1], 0xFF_FFFF);
     }
     draw.pop();
+    draw.still();
+    draw.keep();
 }

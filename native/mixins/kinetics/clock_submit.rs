@@ -45,8 +45,9 @@ fn kinetics_clock_submit(
     draw.rotate_about(up, north, centre);
     model(draw, 0);
     draw.pop();
+    let (dpt, phase) = k::spin_args(pos, 0, speed, 0.0, draw.game_time);
+    draw.spin(k::axis_vector(axis), centre, dpt, phase);
     draw.push();
-    draw.rotate_about(k::axis_vector(axis), k::angle(speed, ticks), centre);
     if let Some((turn, degrees)) = kinetics_crank::lay_along(facing) {
         draw.rotate_about(turn, degrees, centre);
     }
@@ -56,6 +57,7 @@ fn kinetics_clock_submit(
     part(draw, kinetics_casing::HALF_SHAFT.1, kinetics_casing::HALF_SHAFT.0);
     draw.pop();
     draw.pop();
+    draw.still();
     // The hands, built on the west side: turned to the facing, then about their pivot.
     let natural = c::natural(game.native_dimension());
     let (hours, minutes) = c::time(game.native_day_time(), natural);

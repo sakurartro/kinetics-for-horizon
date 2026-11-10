@@ -42,9 +42,9 @@ fn kinetics_stressometer_submit(
     draw.pop();
     // The shaft through it.
     let axis = s::rotation_axis(facing, along);
-    let angle = k::angle(speed, draw.game_time as f64 + f64::from(draw.partial));
+    let (dpt, phase) = k::spin_args(pos, 0, speed, 0.0, draw.game_time);
+    draw.spin(k::axis_vector(axis), centre, dpt, phase);
     draw.push();
-    draw.rotate_about(k::axis_vector(axis), angle, centre);
     if let Some((turn, degrees)) = k::lay_along(axis) {
         draw.rotate_about(turn, degrees, centre);
     }
@@ -52,6 +52,7 @@ fn kinetics_stressometer_submit(
         game.native_draw_model(draw, k::PART_MODELS[0], 0xFF_FFFF);
     }
     draw.pop();
+    draw.still();
     // The heads and needles.
     let progress = s::dial_at(pos, draw.game_time as i64, target).progress(draw.partial);
     for face in s::HORIZONTAL {

@@ -598,6 +598,32 @@ pub fn angle(rpm: f32, ticks: f64) -> f32 {
     ((ticks * rpm as f64 * 360.0 / 1200.0) % 360.0) as f32
 }
 
+/// The phase `BlockEntityDraw::spin` needs for a part now turning `dpt` degrees a tick (angle = game time * dpt +
+/// phase), given the `(dpt, phase, offset)` it was last drawn with. A speed change between two turning speeds carries
+/// on from the angle the part had at `t` (a whole game tick, so a network changing in one tick keeps its parts
+/// meshing); from and to a standstill the part is at its `offset` (tooth offset), as everything at rest is.
+pub fn spin_phase(last: Option<(f32, f32, f32)>, dpt: f32, offset: f32, t: f64) -> f32 {
+    match last {
+        Some((d, p, o)) if d != 0.0 && dpt != 0.0 && o == offset => {
+            (t * (f64::from(d) - f64::from(dpt)) + f64::from(p)).rem_euclid(360.0) as f32
+        }
+        _ => offset,
+    }
+}
+
+static SPUN: std::sync::Mutex<Option<HashMap<(Pos, u8), (f32, f32, f32)>>> = std::sync::Mutex::new(None);
+
+/// `(degrees per tick, phase)` for `BlockEntityDraw::spin` of the part `part` of the block at `pos`, turning at
+/// `rpm` with tooth `offset` degrees, at game tick `game_time`. Remembers what it gave, to carry on at a new speed.
+pub fn spin_args(pos: Pos, part: u8, rpm: f32, offset: f32, game_time: i64) -> (f32, f32) {
+    let dpt = rpm * 360.0 / 1200.0;
+    let mut all = SPUN.lock().unwrap_or_else(|e| e.into_inner());
+    let all = all.get_or_insert_with(HashMap::new);
+    let phase = spin_phase(all.get(&(pos, part)).copied(), dpt, offset, game_time as f64);
+    all.insert((pos, part), (dpt, phase, offset));
+    (dpt, phase)
+}
+
 // Positions whose block changed (`native_block_changed`), solved at the end of
 // their level's tick (`native_level_tick_post`). Both run on the server thread.
 static DIRTY: std::sync::Mutex<Vec<(&'static str, Pos)>> = std::sync::Mutex::new(Vec::new());

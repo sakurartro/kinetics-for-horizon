@@ -576,23 +576,9 @@ fn kinetics_contraption_tick(game: &mut crate::game::Game<'_>, dimension: &str) 
             // SoundSource 4 is `block`.
             game.with_level(|_, level, _| level.native_play_sound(&hit, at, 4, 0.25, 1.0));
         }
-        let id = d::breaker_id(cell);
-        game.destroy_block_progress(id, cell, crack);
-        if let Some(host) = game.lan.as_ref() {
-            host.hub.broadcast_near(
-                cell.map(f64::from),
-                64.0,
-                &horizon_protocol::packets::play::Clientbound::BlockDestruction(horizon_protocol::packets::play::BlockDestruction {
-                    id,
-                    pos: cell,
-                    progress: if (0..10).contains(&crack) { crack as u8 } else { 255 },
-                }),
-                None,
-            );
-        }
+        game.native_set_break_progress(d::breaker_id(cell), cell, crack);
         if step == d::Step::Broken {
-            // An error here is the level's events after the break, which the game itself only reports.
-            let _ = game.destroy_block_dropping(cell);
+            game.native_machine_destroy_block(cell, None, false);
         }
     }
 

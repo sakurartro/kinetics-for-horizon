@@ -22,13 +22,10 @@ fn kinetics_casing_submit(
     let around = [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
     draw.light = k::part_light(around.map(|d| game.native_light([pos[0] + d[0], pos[1] + d[1], pos[2] + d[2]])));
     let centre = [0.5; 3];
-    // Turned about its axis by `degrees`, a part built along y laid along it.
-    let turn = |draw: &mut BlockEntityDraw, degrees: f32| {
-        if let Some(axis) = axis {
-            draw.rotate_about(k::axis_vector(axis), degrees, centre);
-            if let Some((lay, by)) = k::lay_along(axis) {
-                draw.rotate_about(lay, by, centre);
-            }
+    // A part built along y laid along the axis.
+    let lay_along = |draw: &mut BlockEntityDraw| {
+        if let Some((lay, by)) = axis.and_then(k::lay_along) {
+            draw.rotate_about(lay, by, centre);
         }
     };
     if let Some(model) = c::static_look(block, bottom, top) {
@@ -51,27 +48,32 @@ fn kinetics_casing_submit(
         Some(Tag::Float(bits)) => f32::from_bits(*bits),
         _ => 0.0,
     };
-    let angle = k::angle(speed, draw.game_time as f64 + f64::from(draw.partial));
     // Create's model if its pack is on, ours otherwise.
     let part = |draw: &mut BlockEntityDraw, (ours, look): (&str, &str)| {
         if !game.native_draw_model(draw, look, 0xFF_FFFF) {
             game.native_draw_model(draw, ours, 0xFF_FFFF);
         }
     };
+    let (dpt, phase) = k::spin_args(pos, 0, speed, k::tooth_offset(kind, axis, pos), draw.game_time);
+    draw.spin(k::axis_vector(axis), centre, dpt, phase);
     draw.push();
-    turn(draw, angle + k::tooth_offset(kind, axis, pos));
+    lay_along(draw);
     part(draw, (ours, look));
     draw.pop();
     if cog {
         // The half shafts are built along z; -90 degrees about x lays one along +y, 90 along -y.
+        let (dpt, phase) = k::spin_args(pos, 1, speed, 0.0, draw.game_time);
+        draw.spin(k::axis_vector(axis), centre, dpt, phase);
         for (on, degrees) in [(top, -90.0), (bottom, 90.0)] {
             if on {
                 draw.push();
-                turn(draw, angle);
+                lay_along(draw);
                 draw.rotate_about([1.0, 0.0, 0.0], degrees, centre);
                 part(draw, c::HALF_SHAFT);
                 draw.pop();
             }
         }
     }
+    draw.still();
+    draw.keep();
 }

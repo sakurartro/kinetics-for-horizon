@@ -1,6 +1,6 @@
 // Every tick of a drill's block entity: it hits the block in front of it and breaks it when the crack is full
-// (`BlockBreakingKineticBlockEntity.tick`, drill.rs `step`). The break is the game's `Level.destroyBlock(pos, true)`
-// (Create's `BlockHelper.destroyBlock`): the block's drops without a tool, its fluid left in its place.
+// (`BlockBreakingKineticBlockEntity.tick`, drill.rs `step`). The break is `native_machine_destroy_block`
+// (Create's `BlockHelper.destroyBlock`): the block's drops without a tool, its fluid left in its place; the crack is `native_set_break_progress`.
 fn kinetics_drill_tick(game: &mut crate::game::Game<'_>, pos: [i32; 3], entity: &mut ModBlockEntity) {
     use crate::game::{kinetics as k, kinetics_drill as d, kinetics_motor as m};
     use horizon_world::nbt::{JavaString, Tag};
@@ -40,23 +40,8 @@ fn kinetics_drill_tick(game: &mut crate::game::Game<'_>, pos: [i32; 3], entity: 
         // SoundSource 4 is `block`.
         game.with_level(|_, level, _| level.native_play_sound(&hit, at, 4, 0.25, 1.0));
     }
-    // ServerLevel.destroyBlockProgress: the window's own crack, and every player's nearby.
-    let id = d::breaker_id(pos);
-    game.destroy_block_progress(id, front, crack);
-    if let Some(host) = game.lan.as_ref() {
-        host.hub.broadcast_near(
-            front.map(f64::from),
-            64.0,
-            &horizon_protocol::packets::play::Clientbound::BlockDestruction(horizon_protocol::packets::play::BlockDestruction {
-                id,
-                pos: front,
-                progress: if (0..10).contains(&crack) { crack as u8 } else { 255 },
-            }),
-            None,
-        );
-    }
+    game.native_set_break_progress(d::breaker_id(pos), front, crack);
     if step == d::Step::Broken {
-        // An error here is the level's events after the break, which the game itself only reports.
-        let _ = game.destroy_block_dropping(front);
+        game.native_machine_destroy_block(front, None, false);
     }
 }
